@@ -1,0 +1,51 @@
+# 依赖和构建产物
+node_modules/
+dist/
+coverage/
+
+# 日志文件
+*.log
+logs/
+
+# 环境配置文件
+.env
+.env.*
+
+# 锁定文件
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# 编译产物
+*.d.ts
+*.min.js
+*.min.css
+
+# 文档构建产物
+docs/build/
+docs/.docusaurus/
+
+# IDE 配置
+.vscode/
+.idea/
+
+# 临时文件
+*.tmp
+*.temp
+.cache/
+
+# Git 相关
+.git/
+.gitignore
+
+# 特殊格式文件
+*.svg
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.ico
+*.woff
+*.woff2
+*.ttf
+*.eot

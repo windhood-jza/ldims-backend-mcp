@@ -1,76 +1,75 @@
 {
   "compilerOptions": {
     /* 基础选项 */
-    "target": "ES2022",                        /* 编译目标版本 */
-    "module": "NodeNext",                      /* 模块系统（支持ESM和CommonJS） */
-    "moduleResolution": "NodeNext",            /* 模块解析策略 */
-    "lib": ["ES2022"],                        /* 包含的库文件 */
-    
+    "target": "ES2022" /* 编译目标版本 */,
+    "module": "ESNext" /* 模块系统（ESM） */,
+    "moduleResolution": "Node" /* 模块解析策略 */,
+    "lib": ["ES2022"] /* 包含的库文件 */,
+
     /* 输出配置 */
-    "outDir": "./dist",                       /* 编译输出目录 */
-    "rootDir": "./src",                       /* 源码根目录 */
-    "removeComments": false,                  /* 保留注释 */
-    "emitDeclarationOnly": false,             /* 不仅生成声明文件 */
-    "sourceMap": true,                        /* 生成source map */
-    "declaration": true,                      /* 生成.d.ts文件 */
-    "declarationMap": true,                   /* 生成声明文件的source map */
-    
+    "outDir": "./dist" /* 编译输出目录 */,
+    "rootDir": "./src" /* 源码根目录 */,
+    "removeComments": false /* 保留注释 */,
+    "emitDeclarationOnly": false /* 不仅生成声明文件 */,
+    "sourceMap": true /* 生成source map */,
+    "declaration": true /* 生成.d.ts文件 */,
+    "declarationMap": true /* 生成声明文件的source map */,
+
     /* 严格类型检查 */
-    "strict": true,                           /* 启用所有严格类型检查选项 */
-    "noImplicitAny": true,                   /* 禁止隐式any */
-    "strictNullChecks": true,                /* 严格空值检查 */
-    "strictFunctionTypes": true,             /* 严格函数类型检查 */
-    "strictBindCallApply": true,             /* 严格bind/call/apply检查 */
-    "strictPropertyInitialization": true,    /* 严格属性初始化检查 */
-    "noImplicitReturns": true,               /* 检查所有代码路径都有返回值 */
-    "noFallthroughCasesInSwitch": true,      /* 检查switch语句的fallthrough */
-    "noUncheckedIndexedAccess": true,        /* 索引访问时进行未检查访问检查 */
-    "noImplicitOverride": true,              /* 需要显式override */
-    
+    "strict": true /* 启用所有严格类型检查选项 */,
+    "noImplicitAny": true /* 禁止隐式any */,
+    "strictNullChecks": true /* 严格空值检查 */,
+    "strictFunctionTypes": true /* 严格函数类型检查 */,
+    "strictBindCallApply": true /* 严格bind/call/apply检查 */,
+    "strictPropertyInitialization": true /* 严格属性初始化检查 */,
+    "noImplicitReturns": true /* 检查所有代码路径都有返回值 */,
+    "noFallthroughCasesInSwitch": true /* 检查switch语句的fallthrough */,
+    "noUncheckedIndexedAccess": true /* 索引访问时进行未检查访问检查 */,
+    "noImplicitOverride": true /* 需要显式override */,
+
     /* 额外检查 */
-    "noUnusedLocals": true,                  /* 检查未使用的局部变量 */
-    "noUnusedParameters": true,              /* 检查未使用的参数 */
-    "exactOptionalPropertyTypes": true,       /* 精确可选属性类型 */
-    
+    "noUnusedLocals": true /* 检查未使用的局部变量 */,
+    "noUnusedParameters": true /* 检查未使用的参数 */,
+    "exactOptionalPropertyTypes": true /* 精确可选属性类型 */,
+
     /* 模块解析 */
-    "baseUrl": "./",                         /* 模块解析基准目录 */
+    "baseUrl": "./" /* 模块解析基准目录 */,
     "paths": {
-      "@/*": ["src/*"],                      /* 路径映射 */
+      "@/*": ["src/*"] /* 路径映射 */,
       "@/types/*": ["src/types/*"],
       "@/utils/*": ["src/utils/*"],
       "@/services/*": ["src/services/*"]
     },
-    "resolveJsonModule": true,               /* 允许导入JSON文件 */
-    "allowSyntheticDefaultImports": true,    /* 允许默认导入 */
-    "esModuleInterop": true,                 /* ES模块互操作 */
-    "forceConsistentCasingInFileNames": true, /* 强制文件名大小写一致 */
-    
+    "resolveJsonModule": true /* 允许导入JSON文件 */,
+    "allowSyntheticDefaultImports": true /* 允许默认导入 */,
+    "esModuleInterop": true /* ES模块互操作 */,
+    "forceConsistentCasingInFileNames": true /* 强制文件名大小写一致 */,
+
     /* 实验性功能 */
-    "experimentalDecorators": true,          /* 启用装饰器实验性功能 */
-    "emitDecoratorMetadata": true,           /* 生成装饰器元数据 */
-    
+    "experimentalDecorators": true /* 启用装饰器实验性功能 */,
+    "emitDecoratorMetadata": true /* 生成装饰器元数据 */,
+
     /* 其他选项 */
-    "skipLibCheck": true,                    /* 跳过库文件类型检查 */
-    "allowImportingTsExtensions": false,     /* 不允许导入.ts扩展名 */
-    "noEmit": false,                         /* 生成输出文件 */
-    "isolatedModules": true                  /* 每个文件作为独立模块 */
+    "skipLibCheck": true /* 跳过库文件类型检查 */,
+    "allowImportingTsExtensions": false /* 不允许导入.ts扩展名 */,
+    "noEmit": false /* 生成输出文件 */,
+    "isolatedModules": true /* 每个文件作为独立模块 */
   },
-  
+
   "include": [
-    "src/**/*",                             /* 包含src下所有文件 */
-    "tests/**/*"                            /* 包含tests下所有文件 */
+    "src/**/*" /* 包含src下所有文件 */
   ],
-  
+
   "exclude": [
-    "node_modules",                         /* 排除node_modules */
-    "dist",                                 /* 排除编译输出 */
-    "coverage",                             /* 排除测试覆盖率 */
-    "**/*.spec.ts",                         /* 排除规格文件（如需要请移除此行） */
-    "**/*.test.ts"                          /* 排除测试文件（如需要请移除此行） */
+    "node_modules" /* 排除node_modules */,
+    "dist" /* 排除编译输出 */,
+    "coverage" /* 排除测试覆盖率 */,
+    "**/*.spec.ts" /* 排除规格文件（如需要请移除此行） */,
+    "**/*.test.ts" /* 排除测试文件（如需要请移除此行） */
   ],
-  
+
   "ts-node": {
-    "esm": true,                            /* 支持ESM模块 */
+    "esm": true /* 支持ESM模块 */,
     "experimentalSpecifierResolution": "node"
   }
-} 
+}

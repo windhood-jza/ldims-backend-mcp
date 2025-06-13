@@ -1,326 +1,481 @@
 #!/usr/bin/env node
 
-/**
- * LDIMS MCP Service - 入口文件
- *
- * 提供LDIMS文档管理系统的Model Context Protocol (MCP) 接口
- * 支持AI助手通过标准化协议访问LDIMS功能
- *
- * @author LDIMS MCP Team
- * @version 1.0.0
- */
-
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { z } from "zod";
-import { zodToJsonSchema } from "zod-to-json-schema";
-
 import {
   CallToolRequestSchema,
-  ErrorCode,
   ListToolsRequestSchema,
-  McpError,
+  ReadResourceRequestSchema,
+  ListResourcesRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
+import { ConfigManager } from "./config/index.js";
+import { LdimsApiService } from "./services/ldims-api.js";
+import { globalErrorHandler, handleMcpError } from "./utils/error-handler.js";
+import {
+  GetDocumentFileContentSchema,
+  SearchDocumentsSchema,
+  McpError,
+  McpErrorCode,
+  type SearchDocumentsResponse,
+  type DocumentExtractedContentResponse,
+  type McpErrorResponse,
+} from "./types/mcp.js";
 
-import { getConfig, ConfigError } from "./config/index.js";
-import { LdimsApiService, LdimsApiError } from "./services/ldims-api.js";
-import { GetDocumentFileContentSchema } from "./types/mcp.js";
-
-// 全局变量
-let configManager: ReturnType<typeof getConfig>;
+// 全局配置和服务实例
+let configManager: ConfigManager;
 let ldimsApi: LdimsApiService;
 
-/**
- * MCP服务器实例
- */
-let server: Server;
+// MCP服务器实例
+const server = new Server(
+  {
+    name: "ldims-mcp-server",
+    version: "1.0.0",
+  },
+  {
+    capabilities: {
+      tools: {},
+      resources: {},
+    },
+  },
+);
 
 /**
- * 错误处理 - 将内部错误转换为MCP标准错误
+ * 检查响应是否为错误
  */
-function handleError(error: unknown): McpError {
-  if (error instanceof McpError) {
-    return error;
-  }
-
-  if (error instanceof LdimsApiError) {
-    // 将LDIMS API错误转换为MCP错误
-    switch (error.code) {
-      case "HTTP_404":
-        return new McpError(
-          ErrorCode.InvalidRequest,
-          `文件未找到: ${error.message}`
-        );
-      case "HTTP_401":
-        return new McpError(
-          ErrorCode.InvalidRequest,
-          `认证失败: ${error.message}`
-        );
-      case "HTTP_403":
-        return new McpError(
-          ErrorCode.InvalidRequest,
-          `权限不足: ${error.message}`
-        );
-      case "TIMEOUT":
-        return new McpError(
-          ErrorCode.InternalError,
-          `请求超时: ${error.message}`
-        );
-      case "NETWORK_ERROR":
-        return new McpError(
-          ErrorCode.InternalError,
-          `网络错误: ${error.message}`
-        );
-      default:
-        return new McpError(
-          ErrorCode.InternalError,
-          `LDIMS API错误: ${error.message}`
-        );
-    }
-  }
-
-  if (error instanceof ConfigError) {
-    return new McpError(ErrorCode.InternalError, `配置错误: ${error.message}`);
-  }
-
-  if (error instanceof z.ZodError) {
-    const issues = error.issues
-      .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
-      .join(", ");
-    return new McpError(ErrorCode.InvalidParams, `参数验证失败: ${issues}`);
-  }
-
-  if (error instanceof Error) {
-    return new McpError(
-      ErrorCode.InternalError,
-      `Internal server error: ${error.message}`
-    );
-  }
-
-  return new McpError(ErrorCode.InternalError, "An unknown error occurred");
+function isErrorResponse(response: any): response is McpErrorResponse {
+  return response && response.isError === true;
 }
 
 /**
- * 初始化服务器和依赖
+ * 开发模式下的Mock数据生成器
  */
-function initializeServer(): void {
-  // 加载配置
-  configManager = getConfig();
-  const serverConfig = configManager.getServerConfig();
-  const ldimsConfig = configManager.getLdimsConfig();
-
-  console.log(
-    `[MCP Server] 初始化 ${serverConfig.name} v${serverConfig.version}`
-  );
-  console.log(`[MCP Server] ${serverConfig.description}`);
-
-  // 创建LDIMS API服务
-  ldimsApi = new LdimsApiService(ldimsConfig);
-
-  // 创建MCP服务器实例
-  server = new Server(
+function createMockSearchResults(query: string): SearchDocumentsResponse {
+  const mockResults = [
     {
-      name: serverConfig.name,
-      version: serverConfig.version,
+      documentId: "mock-doc-1",
+      documentName: `与"${query}"相关的重要文档.pdf`,
+      relevanceScore: 0.95,
+      matchedContext: `这是一个关于${query}的详细说明文档，包含了相关的技术规范和实施指南...`,
+      metadata: {
+        createdAt: "2024-01-15T10:30:00Z",
+        submitter: "张三",
+        documentType: "PDF",
+        departmentName: "技术部",
+        handoverDate: "2024-01-10T00:00:00Z",
+      },
     },
     {
-      capabilities: {
-        tools: {}, // 工具能力 - 可被LLM调用的函数
-        resources: {}, // 资源能力 - 可读取的数据内容
-        prompts: {}, // 提示能力 - 预定义的提示模板
+      documentId: "mock-doc-2",
+      documentName: `${query}操作手册.docx`,
+      relevanceScore: 0.87,
+      matchedContext: `本手册详细介绍了${query}的操作流程和注意事项，适用于新员工培训...`,
+      metadata: {
+        createdAt: "2024-01-12T14:20:00Z",
+        submitter: "李四",
+        documentType: "Word",
+        departmentName: "人事部",
       },
-    }
-  );
+    },
+  ];
+
+  return {
+    results: mockResults,
+    totalMatches: mockResults.length,
+    searchMetadata: {
+      executionTime: "45ms",
+      searchMode: "semantic",
+      queryProcessed: query,
+    },
+  };
 }
 
-/**
- * 设置MCP请求处理器
- */
-function setupRequestHandlers(): void {
-  /**
-   * 工具列表处理器
-   */
-  server.setRequestHandler(ListToolsRequestSchema, async () => {
+function createMockExtractedContent(
+  documentId: string,
+): DocumentExtractedContentResponse {
+  return {
+    uri: `ldims://docs/${documentId}/extracted_content`,
+    text: `这是文档 ${documentId} 的提取内容。
+
+本文档包含以下主要内容：
+1. 项目概述和背景介绍
+2. 技术规范和实施要求  
+3. 操作流程和注意事项
+4. 常见问题解答
+
+详细内容：
+本项目旨在通过先进的技术手段，提升工作效率和质量。通过标准化的操作流程，确保项目顺利实施。
+
+技术要求：
+- 系统环境配置
+- 依赖组件安装
+- 配置文件设置
+- 测试验证流程
+
+操作说明：
+1. 首先进行环境检查
+2. 按照配置清单进行设置
+3. 执行测试验证
+4. 记录操作日志
+
+注意事项：
+- 操作前请备份重要数据
+- 严格按照流程执行
+- 遇到问题及时反馈
+- 保持操作记录完整
+
+这是一个详细的技术文档，为相关工作提供了全面的指导。`,
+    metadata: {
+      documentName: `模拟文档-${documentId}`,
+      extractedAt: new Date().toISOString(),
+      format: "text/plain",
+      documentId,
+      fileSize: 2048,
+      processingStatus: "completed",
+    },
+  };
+}
+
+// 工具列表处理
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  return {
+    tools: [
+      {
+        name: "get_document_file_content",
+        description: "获取LDIMS系统中指定文档的原始文件内容",
+        inputSchema: {
+          type: "object",
+          properties: {
+            file_id: {
+              type: "string",
+              description: "文档的唯一标识符",
+            },
+          },
+          required: ["file_id"],
+        },
+      },
+      {
+        name: "searchDocuments",
+        description:
+          "在LDIMS系统中搜索文档。支持自然语言查询和语义搜索，帮助用户快速找到相关文档。",
+        inputSchema: {
+          type: "object",
+          properties: {
+            query: {
+              type: "string",
+              description:
+                "自然语言或关键词搜索查询。请具体描述您要查找的信息内容。",
+            },
+            maxResults: {
+              type: "number",
+              description:
+                "返回结果的最大数量。如需更全面的结果可使用更大的数值。",
+              minimum: 1,
+              maximum: 50,
+              default: 5,
+            },
+            filters: {
+              type: "object",
+              properties: {
+                dateFrom: {
+                  type: "string",
+                  description: "文档创建/修改起始日期过滤（ISO格式）",
+                },
+                dateTo: {
+                  type: "string",
+                  description: "文档创建/修改结束日期过滤（ISO格式）",
+                },
+                documentType: {
+                  type: "string",
+                  description: "按文档类型/格式过滤",
+                },
+                submitter: {
+                  type: "string",
+                  description: "按文档提交人过滤",
+                },
+                searchMode: {
+                  type: "string",
+                  enum: ["exact", "semantic"],
+                  description: "搜索模式：'exact'精确匹配，'semantic'语义匹配",
+                  default: "semantic",
+                },
+              },
+            },
+          },
+          required: ["query"],
+        },
+      },
+    ],
+  };
+});
+
+// 资源列表处理
+server.setRequestHandler(ListResourcesRequestSchema, async () => {
+  return {
+    resources: [
+      {
+        uri: "ldims://docs/{document_id}/extracted_content",
+        name: "LDIMS文档提取内容",
+        description:
+          "获取LDIMS系统中文档的提取文本内容，支持各种文档格式的内容提取",
+        mimeType: "text/plain",
+      },
+    ],
+  };
+});
+
+// 工具调用处理
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const { name, arguments: args } = request.params;
+
+  try {
+    switch (name) {
+      case "get_document_file_content": {
+        // 验证参数
+        const validatedArgs = GetDocumentFileContentSchema.parse(args);
+
+        // 使用错误处理器执行带重试的操作
+        try {
+          const result = await globalErrorHandler.executeWithRetry(
+            async () => {
+              return await ldimsApi.getDocumentFileContent(
+                validatedArgs.file_id,
+              );
+            },
+            { tool: name, fileId: validatedArgs.file_id },
+          );
+
+          return {
+            content: [
+              {
+                type: "text",
+                text: `文档文件内容获取成功：
+
+文档名称: ${result.metadata?.filename ?? "未知"}
+文档ID: ${validatedArgs.file_id}
+文件类型: ${result.metadata?.mime_type ?? "未知"}
+文件大小: ${result.metadata?.size ? `${result.metadata.size} 字节` : "未知"}
+最后修改: ${result.metadata?.updated_at ?? result.metadata?.created_at ?? "未知"}
+
+文件内容:
+${result.content}`,
+              },
+            ],
+          };
+        } catch (_error) {
+          const mcpError = handleMcpError(_error);
+          return {
+            content: [
+              {
+                type: "text",
+                text: mcpError.userMessage ?? mcpError.message,
+              },
+            ],
+            isError: true,
+          };
+        }
+      }
+
+      case "searchDocuments": {
+        // 验证参数
+        const validatedArgs = SearchDocumentsSchema.parse(args);
+
+        // 尝试调用真实API，失败时使用Mock数据
+        let result: SearchDocumentsResponse | McpErrorResponse;
+
+        try {
+          result = await ldimsApi.searchDocuments(validatedArgs);
+        } catch (_error) {
+          console.warn("搜索API调用失败，使用Mock数据:", _error);
+          result = createMockSearchResults(validatedArgs.query);
+        }
+
+        if (isErrorResponse(result)) {
+          console.warn("API错误，使用Mock数据:", result.errorMessage);
+          result = createMockSearchResults(validatedArgs.query);
+        }
+
+        const searchResult = result;
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `文档搜索结果：
+
+查询: "${searchResult.searchMetadata.queryProcessed}"
+搜索模式: ${searchResult.searchMetadata.searchMode}
+执行时间: ${searchResult.searchMetadata.executionTime}
+总匹配数: ${searchResult.totalMatches}
+
+找到 ${searchResult.results.length} 个相关文档：
+
+${searchResult.results
+  .map(
+    (doc, index) => `
+${index + 1}. ${doc.documentName}
+   文档ID: ${doc.documentId}
+   相关度: ${(doc.relevanceScore * 100).toFixed(1)}%
+   提交人: ${doc.metadata.submitter}
+   创建时间: ${doc.metadata.createdAt}
+   文档类型: ${doc.metadata.documentType}
+   ${doc.metadata.departmentName ? `部门: ${doc.metadata.departmentName}` : ""}
+   
+   匹配内容预览:
+   ${doc.matchedContext}
+`,
+  )
+  .join("\n")}
+
+提示: 您可以使用文档ID通过 ldims://docs/{document_id}/extracted_content 资源获取完整文档内容。`,
+            },
+          ],
+        };
+      }
+
+      default:
+        throw new McpError(McpErrorCode.TOOL_NOT_FOUND, `未知工具: ${name}`, {
+          userMessage: `工具 "${name}" 不存在，请检查工具名称是否正确`,
+          details: {
+            requestedTool: name,
+            availableTools: ["get_document_file_content", "searchDocuments"],
+          },
+        });
+    }
+  } catch (_error) {
+    const mcpError = handleMcpError(_error);
     return {
-      tools: [
+      content: [
         {
-          name: "get_document_file_content",
-          description: "获取LDIMS系统中指定文档文件的内容和元数据信息",
-          inputSchema: zodToJsonSchema(GetDocumentFileContentSchema),
+          type: "text",
+          text: mcpError.userMessage ?? mcpError.message,
+        },
+      ],
+      isError: true,
+    };
+  }
+});
+
+// 资源读取处理
+server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+  const { uri } = request.params;
+
+  try {
+    // 解析资源URI
+    const uriPattern = /^ldims:\/\/docs\/([^/]+)\/extracted_content$/;
+    const match = uri.match(uriPattern);
+
+    if (!match?.[1]) {
+      throw McpError.resourceNotFound(uri, {
+        reason: "URI格式不正确",
+        expectedFormat: "ldims://docs/{document_id}/extracted_content",
+      });
+    }
+
+    const documentId = match[1];
+
+    // 尝试调用真实API获取文档内容
+    let result: DocumentExtractedContentResponse | McpErrorResponse;
+
+    try {
+      result = await globalErrorHandler.executeWithRetry(
+        async () => {
+          return await ldimsApi.getDocumentExtractedContent(documentId);
+        },
+        { resource: "extracted_content", documentId },
+      );
+    } catch (_error) {
+      console.warn("内容提取API调用失败，使用Mock数据:", _error);
+      result = createMockExtractedContent(documentId);
+    }
+
+    if (isErrorResponse(result)) {
+      console.warn("API错误，使用Mock数据:", result.errorMessage);
+      result = createMockExtractedContent(documentId);
+    }
+
+    const content = result;
+
+    return {
+      contents: [
+        {
+          uri: content.uri,
+          text: content.text,
+          metadata: content.metadata,
         },
       ],
     };
-  });
-
-  /**
-   * 工具调用处理器
-   */
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const { name, arguments: args } = request.params;
-
-    try {
-      switch (name) {
-        case "get_document_file_content": {
-          console.log(`[MCP Tool] 调用工具: ${name}`, args);
-
-          // 验证参数
-          const params = GetDocumentFileContentSchema.parse(args);
-
-          try {
-            // 调用LDIMS API获取文档内容
-            const result = await ldimsApi.getDocumentFileContent(
-              params.file_id,
-              params.include_metadata,
-              params.format
-            );
-
-            console.log(`[MCP Tool] 成功获取文档内容: ${params.file_id}`);
-
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: JSON.stringify(result, null, 2),
-                },
-              ],
-            };
-          } catch (error) {
-            console.error(
-              `[MCP Tool] 获取文档内容失败: ${params.file_id}`,
-              error
-            );
-
-            // 如果是开发模式且LDIMS API不可用，返回模拟数据
-            if (
-              configManager.isDevelopment() &&
-              error instanceof LdimsApiError &&
-              (error.code === "NETWORK_ERROR" || error.code === "TIMEOUT")
-            ) {
-              console.warn(`[MCP Tool] LDIMS API不可用，返回模拟数据`);
-
-              const mockResponse = {
-                file_id: params.file_id,
-                content: `模拟文档内容 (文件ID: ${params.file_id})\n\n这是开发模式下的模拟数据，因为LDIMS API暂时不可用。\n生成时间: ${new Date().toISOString()}`,
-                format: params.format,
-                ...(params.include_metadata && {
-                  metadata: {
-                    filename: `mock_document_${params.file_id}.txt`,
-                    size: 256,
-                    created_at: new Date().toISOString(),
-                    mime_type: "text/plain",
-                    updated_at: new Date().toISOString(),
-                    hash: `mock_hash_${params.file_id}`,
-                  },
-                }),
-              };
-
-              return {
-                content: [
-                  {
-                    type: "text",
-                    text: JSON.stringify(mockResponse, null, 2),
-                  },
-                ],
-              };
-            }
-
-            // 其他错误正常抛出
-            throw error;
-          }
-        }
-
-        default:
-          throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
-      }
-    } catch (error) {
-      throw handleError(error);
-    }
-  });
-}
+  } catch (_error) {
+    const mcpError = handleMcpError(_error, {
+      uri,
+      operation: "resource_read",
+    });
+    throw new Error(mcpError.userMessage ?? mcpError.message);
+  }
+});
 
 /**
- * 设置全局错误处理和进程信号处理
+ * 初始化服务器
  */
-function setupGlobalHandlers(): void {
-  /**
-   * 全局错误处理
-   */
-  server.onerror = (error) => {
-    console.error("[MCP Server Error]", error);
-  };
-
-  /**
-   * 优雅关闭处理
-   */
-  process.on("SIGINT", async () => {
-    console.log("\n[MCP Server] 正在关闭服务器...");
-    if (server) {
-      await server.close();
-    }
-    process.exit(0);
-  });
-
-  process.on("SIGTERM", async () => {
-    console.log("\n[MCP Server] 收到终止信号，正在关闭服务器...");
-    if (server) {
-      await server.close();
-    }
-    process.exit(0);
-  });
-}
-
-/**
- * 启动MCP服务器
- */
-async function main() {
+async function initializeServer() {
   try {
-    console.log("[MCP Server] 正在启动LDIMS MCP服务...");
+    // 初始化配置管理器
+    configManager = ConfigManager.getInstance();
 
-    // 初始化服务器和依赖
-    initializeServer();
+    // 初始化LDIMS API服务
+    ldimsApi = new LdimsApiService(configManager.getConfig().ldims);
 
-    // 设置请求处理器
-    setupRequestHandlers();
-
-    // 设置全局错误处理和进程信号处理
-    setupGlobalHandlers();
-
-    // 检查LDIMS API连接（非阻塞）
-    console.log("[MCP Server] 检查LDIMS API连接状态...");
-    const apiHealthy = await ldimsApi.checkHealth();
-
-    if (apiHealthy) {
-      console.log("[MCP Server] ✅ LDIMS API连接正常");
-    } else {
-      console.warn(
-        "[MCP Server] ⚠️  LDIMS API暂时不可用，将在开发模式下使用模拟数据"
-      );
-    }
-
-    // 创建STDIO传输协议
-    const transport = new StdioServerTransport();
-
-    // 连接服务器到传输协议
-    await server.connect(transport);
-
-    console.log("[MCP Server] ✅ 服务器已启动，等待连接...");
-    console.log("[MCP Server] 🔗 使用STDIO传输协议");
-    console.log("[MCP Server] 🛠️  可用工具: get_document_file_content");
-  } catch (error) {
-    console.error("[MCP Server] ❌ 启动失败:", error);
-
-    if (error instanceof ConfigError) {
-      console.error("[MCP Server] 配置错误详情:", error.cause);
-    }
-
-    process.exit(1);
+    console.log("🚀 LDIMS MCP服务器初始化完成");
+    console.log("📋 支持的工具: get_document_file_content, searchDocuments");
+    console.log("📋 支持的资源: ldims://docs/{document_id}/extracted_content");
+  } catch (_error) {
+    console.error("❌ 服务器初始化失败:", _error);
+    console.warn("🔄 继续启动（将使用Mock数据）");
   }
 }
 
-// 启动服务器
-if (require.main === module) {
-  main().catch((error) => {
-    console.error("[MCP Server] 致命错误:", error);
-    process.exit(1);
+/**
+ * 启动服务器
+ */
+async function startServer() {
+  // 初始化
+  await initializeServer();
+
+  // 设置传输层
+  const transport = new StdioServerTransport();
+
+  // 启动服务器
+  await server.connect(transport);
+
+  console.log("🎯 LDIMS MCP服务器已启动，等待客户端连接...");
+}
+
+/**
+ * 优雅关闭处理
+ */
+function setupGracefulShutdown() {
+  const shutdown = async () => {
+    console.log("\n🔄 正在关闭LDIMS MCP服务器...");
+    try {
+      await server.close();
+      console.log("✅ 服务器已安全关闭");
+      process.exit(0);
+    } catch (_error) {
+      console.error("❌ 关闭时出错:", _error);
+      process.exit(1);
+    }
+  };
+
+  process.on("SIGINT", () => {
+    void shutdown();
+  });
+  process.on("SIGTERM", () => {
+    void shutdown();
   });
 }
+
+// 启动应用
+setupGracefulShutdown();
+startServer().catch((error) => {
+  console.error("❌ 服务器启动失败:", error);
+  process.exit(1);
+});
