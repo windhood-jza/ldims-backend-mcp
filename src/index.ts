@@ -456,6 +456,12 @@ ${searchResult.results
    📅 创建时间: ${new Date(doc.metadata.createdAt).toLocaleString("zh-CN")}
    📋 文档类型: ${doc.metadata.documentType}
    ${doc.metadata.departmentName ? `🏢 部门: ${doc.metadata.departmentName}` : ""}
+   📁 文件数量: ${doc.metadata.fileCount || 0}
+   ${
+     doc.metadata.fileDetails && doc.metadata.fileDetails.length > 0
+       ? `📎 文件列表:\n${doc.metadata.fileDetails.map(file => `     • 文件ID: ${file.fileId} | 文件名: ${file.fileName} | 内容长度: ${file.contentLength}字符`).join("\n")}`
+       : ""
+   }
    
    📝 匹配内容预览:
    ${doc.matchedContext}

@@ -8,15 +8,8 @@
 
 import { z } from "zod";
 import type { McpServiceConfig } from "../types/mcp.js";
-import {
-  EnvironmentConfigSchema,
-  type EnvironmentConfig,
-} from "../types/mcp.js";
-import {
-  getEnhancedConfig,
-  type ConfigLoadOptions,
-  ConfigValidationLevel,
-} from "./enhanced-config.js";
+import { EnvironmentConfigSchema, type EnvironmentConfig } from "../types/mcp.js";
+import { getEnhancedConfig, type ConfigLoadOptions, ConfigValidationLevel } from "./enhanced-config.js";
 
 /**
  * 配置错误类
@@ -24,7 +17,7 @@ import {
 export class ConfigError extends Error {
   constructor(
     message: string,
-    public override cause?: unknown,
+    public override cause?: unknown
   ) {
     super(message);
     this.name = "ConfigError";
@@ -81,27 +74,27 @@ export class ConfigManager {
           version: env.MCP_SERVER_VERSION,
           description: "LDIMS文档管理系统MCP接口服务",
           author: "LDIMS Team",
-          license: "MIT",
+          license: "MIT"
         },
         ldims: {
           baseUrl: env.LDIMS_API_BASE_URL,
           version: env.LDIMS_API_VERSION,
           ...(env.LDIMS_AUTH_TOKEN && { authToken: env.LDIMS_AUTH_TOKEN }),
-          timeout: Number(env.LDIMS_API_TIMEOUT),
-          retryCount: Number(env.LDIMS_API_RETRY_COUNT),
+          timeout: env.LDIMS_API_TIMEOUT,
+          retryCount: env.LDIMS_API_RETRY_COUNT
         },
         logging: {
           level: env.LOG_LEVEL,
           console: true,
           ...(env.LOG_FILE && { file: env.LOG_FILE }),
-          format: env.LOG_FORMAT,
+          format: env.LOG_FORMAT
         },
         errorHandling: {
           detailed: env.ERROR_DETAILED ?? env.NODE_ENV === "development",
           stackTrace: env.ERROR_STACK_TRACE ?? env.NODE_ENV === "development",
           retryDelay: env.ERROR_RETRY_DELAY ?? 1000,
-          maxRetries: env.ERROR_MAX_RETRIES ?? 3,
-        },
+          maxRetries: env.ERROR_MAX_RETRIES ?? 3
+        }
       };
 
       // 验证配置
@@ -178,8 +171,7 @@ export class ConfigManager {
       new URL(config.ldims.baseUrl);
     } catch (_error) {
       throw new ConfigError(
-        `无效的LDIMS API URL: ${config.ldims.baseUrl}\n` +
-          "请确保URL格式正确，例如: http://localhost:3000",
+        `无效的LDIMS API URL: ${config.ldims.baseUrl}\n` + "请确保URL格式正确，例如: http://localhost:3000"
       );
     }
 
@@ -218,22 +210,13 @@ export class ConfigManager {
       isValid: true,
       errors: [],
       warnings: [],
-      suggestions: [],
+      suggestions: []
     };
 
     // 检查LDIMS API连接性（仅在开发模式下警告）
-    if (
-      this.config.ldims.baseUrl.includes("localhost") &&
-      this.isProduction()
-    ) {
+    if (this.config.ldims.baseUrl.includes("localhost") && this.isProduction()) {
       result.warnings.push("生产环境中使用localhost作为API地址");
       result.suggestions.push("建议在生产环境中使用实际的API服务器地址");
-    }
-
-    // 检查认证配置
-    if (!this.config.ldims.authToken && this.isProduction()) {
-      result.warnings.push("生产环境中未配置API认证令牌");
-      result.suggestions.push("建议在生产环境中配置LDIMS_AUTH_TOKEN");
     }
 
     // 检查日志配置
@@ -257,14 +240,12 @@ export class ConfigManager {
     // 输出检查结果
     if (result.warnings.length > 0) {
       console.warn("[Config] 配置警告:");
-      result.warnings.forEach((warning) => console.warn(`  ⚠️  ${warning}`));
+      result.warnings.forEach(warning => console.warn(`  ⚠️  ${warning}`));
     }
 
     if (result.suggestions.length > 0 && this.isDevelopment()) {
       console.log("[Config] 建议:");
-      result.suggestions.forEach((suggestion) =>
-        console.log(`  💡 ${suggestion}`),
-      );
+      result.suggestions.forEach(suggestion => console.log(`  💡 ${suggestion}`));
     }
 
     return result;
@@ -283,13 +264,15 @@ export class ConfigManager {
     console.log("   cp .env.example .env\n");
 
     console.log("2. 必须配置的环境变量:");
-    console.log("   LDIMS_API_BASE_URL=http://localhost:3000");
-    console.log("   NODE_ENV=development\n");
+    console.log("   LDIMS_API_BASE_URL=http://localhost:8080");
+    console.log("   LDIMS_API_VERSION=v1");
+    console.log("   # LOG_LEVEL=debug");
+    console.log("=".repeat(60));
 
     console.log("3. 可选配置项:");
-    console.log("   LDIMS_AUTH_TOKEN=your_token_here");
-    console.log("   LOG_LEVEL=info");
-    console.log("   LOG_FILE=logs/mcp-service.log\n");
+    console.log("   LDIMS_API_TIMEOUT=30000");
+    console.log("   LDIMS_API_RETRY_COUNT=3");
+    console.log("   LOG_FORMAT=text\n");
 
     console.log("4. 更多信息请参考 .env.example 文件");
     console.log("=".repeat(60) + "\n");
@@ -303,7 +286,7 @@ export class ConfigManager {
     console.log("🔧 环境变量配置错误修复建议");
     console.log("=".repeat(60));
 
-    issues.forEach((issue) => {
+    issues.forEach(issue => {
       const envVar = issue.path[0];
       console.log(`\n❌ ${envVar}:`);
       console.log(`   问题: ${issue.message}`);
@@ -311,7 +294,7 @@ export class ConfigManager {
       // 提供具体的修复建议
       switch (envVar) {
         case "LDIMS_API_BASE_URL":
-          console.log("   建议: LDIMS_API_BASE_URL=http://localhost:3000");
+          console.log("   建议: LDIMS_API_BASE_URL=http://localhost:8080");
           break;
         case "LDIMS_API_TIMEOUT":
           console.log("   建议: LDIMS_API_TIMEOUT=30000");
@@ -438,11 +421,10 @@ export function getEnhancedConfigManager(options?: ConfigLoadOptions) {
  */
 export function getDevConfig() {
   return getEnhancedConfig({
-    strategy: require("./enhanced-config.js").ConfigLoadStrategy
-      .ENVIRONMENT_WITH_FALLBACK,
+    strategy: require("./enhanced-config.js").ConfigLoadStrategy.ENVIRONMENT_WITH_FALLBACK,
     validationLevel: ConfigValidationLevel.STRICT,
     verbose: true,
-    environment: "development",
+    environment: "development"
   });
 }
 
@@ -451,10 +433,9 @@ export function getDevConfig() {
  */
 export function getProdConfig() {
   return getEnhancedConfig({
-    strategy: require("./enhanced-config.js").ConfigLoadStrategy
-      .ENVIRONMENT_SPECIFIC,
+    strategy: require("./enhanced-config.js").ConfigLoadStrategy.ENVIRONMENT_SPECIFIC,
     validationLevel: ConfigValidationLevel.COMPREHENSIVE,
     verbose: false,
-    environment: "production",
+    environment: "production"
   });
 }

@@ -6,7 +6,16 @@
  * 用于P3阶段验证真实API集成
  */
 
-import { LdimsApiService } from "./dist/services/ldims-api.js";
+import dotenv from "dotenv";
+import { LdimsApiService } from "../dist/services/ldims-api.js";
+
+// 加载环境变量
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+dotenv.config({ path: join(__dirname, "../.env") });
 
 // 配置
 const API_CONFIG = {
@@ -16,7 +25,7 @@ const API_CONFIG = {
   retryCount: parseInt(process.env.LDIMS_API_RETRY_COUNT || "3"),
   authToken:
     process.env.LDIMS_AUTH_TOKEN ||
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc1MDMyNjA5MSwiZXhwIjoxNzUwNDEyNDkxfQ.eNi1y91If00iIcanjWfxMEm7nMq6-9LWldor_AFw6Dc"
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc1MDQxNzk2OSwiZXhwIjoxOTg2MzQ3NTY5fQ.o-jIKyHGQLEa_0Ukj8ZRBT0PqLJsKAQY3VqwEzDg4yM"
 };
 
 console.log("🔄 开始P3阶段API连接测试...");
@@ -42,9 +51,10 @@ async function testApiConnection() {
   }
 
   console.log("\n=== 测试 3: 文档搜索 ===");
+  let firstDocumentId = null;
   try {
     const searchResult = await apiService.searchDocuments({
-      query: "测试API",
+      query: "科学技术奖",
       maxResults: 3
     });
 
@@ -57,6 +67,7 @@ async function testApiConnection() {
       console.log(`⏱️  执行时间: ${searchResult.searchMetadata.executionTime}`);
 
       if (searchResult.results.length > 0) {
+        firstDocumentId = searchResult.results[0].documentId;
         console.log("📋 第一个结果:", {
           id: searchResult.results[0].documentId,
           name: searchResult.results[0].documentName,
@@ -66,6 +77,35 @@ async function testApiConnection() {
     }
   } catch (error) {
     console.log("❌ 搜索测试异常:", error.message);
+  }
+
+  console.log("\n=== 测试 4: 文档文件内容获取 ===");
+  try {
+    // 尝试获取文件ID为1的文档内容
+    const fileContent = await apiService.getDocumentFileContent("1");
+    console.log("✅ 文件内容获取成功!");
+    console.log(`📄 文件ID: ${fileContent.file_id}`);
+    console.log(`📝 内容长度: ${fileContent.content.length} 字符`);
+    console.log(`📋 格式: ${fileContent.format}`);
+    if (fileContent.metadata) {
+      console.log(`📁 文件名: ${fileContent.metadata.filename}`);
+      console.log(`📊 文件大小: ${fileContent.metadata.size} 字节`);
+    }
+  } catch (error) {
+    console.log("❌ 文件内容获取失败:", error.message);
+
+    // 如果第一个测试失败，尝试使用搜索结果中的文档ID
+    if (firstDocumentId) {
+      console.log(`🔄 尝试使用搜索结果中的文档ID: ${firstDocumentId}`);
+      try {
+        const fileContent = await apiService.getDocumentFileContent(firstDocumentId);
+        console.log("✅ 使用搜索结果文档ID获取成功!");
+        console.log(`📄 文件ID: ${fileContent.file_id}`);
+        console.log(`📝 内容长度: ${fileContent.content.length} 字符`);
+      } catch (retryError) {
+        console.log("❌ 重试也失败:", retryError.message);
+      }
+    }
   }
 
   console.log("\n=== 测试总结 ===");

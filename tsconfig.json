@@ -4,7 +4,7 @@
     "target": "ES2022" /* 编译目标版本 */,
     "module": "ESNext" /* 模块系统（ESM） */,
     "moduleResolution": "Node" /* 模块解析策略 */,
-    "lib": ["ES2022"] /* 包含的库文件 */,
+    "lib": ["ES2022", "DOM"] /* 包含的库文件 */,
 
     /* 输出配置 */
     "outDir": "./dist" /* 编译输出目录 */,

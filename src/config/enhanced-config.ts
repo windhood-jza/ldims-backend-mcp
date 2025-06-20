@@ -11,7 +11,7 @@ import {
   type McpServiceConfig,
   type EnvironmentConfig,
   type ErrorHandlingConfig,
-  EnvironmentConfigSchema,
+  EnvironmentConfigSchema
 } from "../types/mcp.js";
 
 /**
@@ -25,7 +25,7 @@ export enum ConfigLoadStrategy {
   /** 优先环境特定，回退到 .env */
   ENVIRONMENT_WITH_FALLBACK = "environment_with_fallback",
   /** 合并所有配置文件 */
-  MERGE_ALL = "merge_all",
+  MERGE_ALL = "merge_all"
 }
 
 /**
@@ -37,7 +37,7 @@ export enum ConfigValidationLevel {
   /** 严格验证 */
   STRICT = "strict",
   /** 完整验证（包括连接性测试） */
-  COMPREHENSIVE = "comprehensive",
+  COMPREHENSIVE = "comprehensive"
 }
 
 /**
@@ -47,7 +47,7 @@ export enum ConfigIssueType {
   ERROR = "error",
   WARNING = "warning",
   SUGGESTION = "suggestion",
-  INFO = "info",
+  INFO = "info"
 }
 
 /**
@@ -102,7 +102,7 @@ export class EnhancedConfigError extends Error {
   constructor(
     message: string,
     public readonly issues: ConfigIssue[],
-    public override cause?: unknown,
+    public override cause?: unknown
   ) {
     super(message);
     this.name = "EnhancedConfigError";
@@ -112,10 +112,8 @@ export class EnhancedConfigError extends Error {
    * 获取错误摘要
    */
   getSummary(): string {
-    const errors = this.issues.filter((i) => i.type === ConfigIssueType.ERROR);
-    const warnings = this.issues.filter(
-      (i) => i.type === ConfigIssueType.WARNING,
-    );
+    const errors = this.issues.filter(i => i.type === ConfigIssueType.ERROR);
+    const warnings = this.issues.filter(i => i.type === ConfigIssueType.WARNING);
 
     return `配置验证失败: ${errors.length} 个错误, ${warnings.length} 个警告`;
   }
@@ -125,8 +123,8 @@ export class EnhancedConfigError extends Error {
    */
   getFixSuggestions(): string[] {
     return this.issues
-      .filter((i) => i.suggestion)
-      .map((i) => i.suggestion!)
+      .filter(i => i.suggestion)
+      .map(i => i.suggestion!)
       .filter((suggestion, index, arr) => arr.indexOf(suggestion) === index);
   }
 } /**
@@ -141,11 +139,10 @@ export class EnhancedConfigManager {
   private constructor(options: ConfigLoadOptions = {}) {
     this.loadOptions = {
       configDir: options.configDir ?? process.cwd(),
-      strategy:
-        options.strategy ?? ConfigLoadStrategy.ENVIRONMENT_WITH_FALLBACK,
+      strategy: options.strategy ?? ConfigLoadStrategy.ENVIRONMENT_WITH_FALLBACK,
       validationLevel: options.validationLevel ?? ConfigValidationLevel.STRICT,
       verbose: options.verbose ?? process.env.NODE_ENV === "development",
-      environment: options.environment ?? process.env.NODE_ENV ?? "development",
+      environment: options.environment ?? process.env.NODE_ENV ?? "development"
     };
 
     this.log("🔧 初始化增强配置管理器...");
@@ -210,12 +207,7 @@ export class EnhancedConfigManager {
           break;
 
         case ConfigLoadStrategy.ENVIRONMENT_WITH_FALLBACK:
-          if (
-            !this.loadEnvFile(
-              `.env.${this.loadOptions.environment}`,
-              loadedFiles,
-            )
-          ) {
+          if (!this.loadEnvFile(`.env.${this.loadOptions.environment}`, loadedFiles)) {
             this.loadEnvFile(".env", loadedFiles);
           }
           break;
@@ -262,9 +254,7 @@ export class EnhancedConfigManager {
         });
 
         loadedFiles.push(filename);
-        this.log(
-          `✅ ${filename} 文件加载成功 (${Object.keys(envVars).length} 个变量)`,
-        );
+        this.log(`✅ ${filename} 文件加载成功 (${Object.keys(envVars).length} 个变量)`);
         return true;
       } else {
         this.log(`ℹ️  ${filename} 文件不存在`);
@@ -282,7 +272,7 @@ export class EnhancedConfigManager {
   private parseEnvFile(content: string): Record<string, string> {
     const envVars: Record<string, string> = {};
 
-    content.split("\n").forEach((line) => {
+    content.split("\n").forEach(line => {
       // 移除注释和空行
       line = line.trim();
       if (!line || line.startsWith("#")) {
@@ -299,10 +289,7 @@ export class EnhancedConfigManager {
       let value = line.substring(equalIndex + 1).trim();
 
       // 移除引号
-      if (
-        (value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))
-      ) {
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
         value = value.slice(1, -1);
       }
 
@@ -319,7 +306,7 @@ export class EnhancedConfigManager {
       detailed: env.ERROR_DETAILED ?? env.NODE_ENV === "development",
       stackTrace: env.ERROR_STACK_TRACE ?? env.NODE_ENV === "development",
       retryDelay: env.ERROR_RETRY_DELAY ?? 1000,
-      maxRetries: env.ERROR_MAX_RETRIES ?? 3,
+      maxRetries: env.ERROR_MAX_RETRIES ?? 3
     };
 
     const config: McpServiceConfig = {
@@ -328,22 +315,22 @@ export class EnhancedConfigManager {
         version: env.MCP_SERVER_VERSION,
         description: "LDIMS文档管理系统MCP接口服务",
         author: "LDIMS Team",
-        license: "MIT",
+        license: "MIT"
       },
       ldims: {
         baseUrl: env.LDIMS_API_BASE_URL,
         version: env.LDIMS_API_VERSION,
         ...(env.LDIMS_AUTH_TOKEN && { authToken: env.LDIMS_AUTH_TOKEN }),
         timeout: Number(env.LDIMS_API_TIMEOUT),
-        retryCount: Number(env.LDIMS_API_RETRY_COUNT),
+        retryCount: Number(env.LDIMS_API_RETRY_COUNT)
       },
       logging: {
         level: env.LOG_LEVEL,
         console: true,
         ...(env.LOG_FILE && { file: env.LOG_FILE }),
-        format: env.LOG_FORMAT,
+        format: env.LOG_FORMAT
       },
-      errorHandling,
+      errorHandling
     };
 
     // 开发模式下显示配置详情
@@ -373,18 +360,15 @@ export class EnhancedConfigManager {
     }
 
     // 完整验证
-    if (
-      this.loadOptions.validationLevel === ConfigValidationLevel.COMPREHENSIVE
-    ) {
+    if (this.loadOptions.validationLevel === ConfigValidationLevel.COMPREHENSIVE) {
       this.performComprehensiveValidation(issues);
     }
 
     const summary = {
-      errors: issues.filter((i) => i.type === ConfigIssueType.ERROR).length,
-      warnings: issues.filter((i) => i.type === ConfigIssueType.WARNING).length,
-      suggestions: issues.filter((i) => i.type === ConfigIssueType.SUGGESTION)
-        .length,
-      infos: issues.filter((i) => i.type === ConfigIssueType.INFO).length,
+      errors: issues.filter(i => i.type === ConfigIssueType.ERROR).length,
+      warnings: issues.filter(i => i.type === ConfigIssueType.WARNING).length,
+      suggestions: issues.filter(i => i.type === ConfigIssueType.SUGGESTION).length,
+      infos: issues.filter(i => i.type === ConfigIssueType.INFO).length
     };
 
     const result: EnhancedConfigValidationResult = {
@@ -393,7 +377,7 @@ export class EnhancedConfigManager {
       summary,
       environment: this.loadOptions.environment,
       loadedFiles,
-      validationLevel: this.loadOptions.validationLevel,
+      validationLevel: this.loadOptions.validationLevel
     };
 
     this.reportValidationResults(result);
@@ -412,7 +396,7 @@ export class EnhancedConfigManager {
         message: "LDIMS API基础URL不能为空",
         field: "LDIMS_API_BASE_URL",
         suggestion: "请设置 LDIMS_API_BASE_URL 环境变量",
-        severity: "critical",
+        severity: "critical"
       });
     }
 
@@ -427,7 +411,7 @@ export class EnhancedConfigManager {
           message: `无效的LDIMS API URL: ${this.config.ldims.baseUrl}`,
           field: "LDIMS_API_BASE_URL",
           suggestion: "请确保URL格式正确，例如: http://localhost:3000",
-          severity: "high",
+          severity: "high"
         });
       }
     }
@@ -440,7 +424,7 @@ export class EnhancedConfigManager {
         message: "API超时时间必须大于0毫秒",
         field: "LDIMS_API_TIMEOUT",
         suggestion: "建议设置为15000-60000毫秒之间",
-        severity: "medium",
+        severity: "medium"
       });
     }
 
@@ -452,7 +436,7 @@ export class EnhancedConfigManager {
         message: "重试次数不能为负数",
         field: "LDIMS_API_RETRY_COUNT",
         suggestion: "建议设置为0-5之间",
-        severity: "medium",
+        severity: "medium"
       });
     }
   } /**
@@ -472,7 +456,7 @@ export class EnhancedConfigManager {
           message: "生产环境中未配置API认证令牌",
           field: "LDIMS_AUTH_TOKEN",
           suggestion: "强烈建议在生产环境中配置LDIMS_AUTH_TOKEN",
-          severity: "high",
+          severity: "high"
         });
       }
 
@@ -484,7 +468,7 @@ export class EnhancedConfigManager {
           message: "生产环境中使用localhost作为API地址",
           field: "LDIMS_API_BASE_URL",
           suggestion: "生产环境应使用实际的API服务器地址",
-          severity: "high",
+          severity: "high"
         });
       }
 
@@ -496,7 +480,7 @@ export class EnhancedConfigManager {
           message: "生产环境中使用debug日志级别",
           field: "LOG_LEVEL",
           suggestion: "生产环境建议使用warn或error日志级别",
-          severity: "medium",
+          severity: "medium"
         });
       }
 
@@ -508,7 +492,7 @@ export class EnhancedConfigManager {
           message: "生产环境中未配置日志文件",
           field: "LOG_FILE",
           suggestion: "生产环境建议配置日志文件存储",
-          severity: "low",
+          severity: "low"
         });
       }
     }
@@ -522,7 +506,7 @@ export class EnhancedConfigManager {
           message: "开发环境中使用error日志级别",
           field: "LOG_LEVEL",
           suggestion: "开发环境建议使用debug或info日志级别",
-          severity: "low",
+          severity: "low"
         });
       }
     }
@@ -535,7 +519,7 @@ export class EnhancedConfigManager {
         message: "API超时时间设置过长（>60秒）",
         field: "LDIMS_API_TIMEOUT",
         suggestion: "建议将超时时间设置在15-30秒之间",
-        severity: "medium",
+        severity: "medium"
       });
     }
 
@@ -546,7 +530,7 @@ export class EnhancedConfigManager {
         message: "重试次数设置过高（>5次）",
         field: "LDIMS_API_RETRY_COUNT",
         suggestion: "建议将重试次数设置在0-5之间",
-        severity: "low",
+        severity: "low"
       });
     }
 
@@ -560,7 +544,7 @@ export class EnhancedConfigManager {
             type: ConfigIssueType.INFO,
             code: "LOG_DIR_CREATED",
             message: `创建日志目录: ${logDir}`,
-            severity: "low",
+            severity: "low"
           });
         }
       } catch (_error) {
@@ -570,7 +554,7 @@ export class EnhancedConfigManager {
           message: `无法创建日志目录 ${logDir}`,
           field: "LOG_FILE",
           suggestion: "请检查目录权限或使用其他路径",
-          severity: "medium",
+          severity: "medium"
         });
       }
     }
@@ -585,7 +569,7 @@ export class EnhancedConfigManager {
       code: "COMPREHENSIVE_VALIDATION_SKIPPED",
       message: "连接性测试已跳过（需要异步支持）",
       suggestion: "可以在服务启动后手动测试API连接",
-      severity: "low",
+      severity: "low"
     });
   }
 
@@ -593,7 +577,7 @@ export class EnhancedConfigManager {
    * 转换Zod错误为配置问题
    */
   private convertZodErrorToIssues(error: z.ZodError): ConfigIssue[] {
-    return error.issues.map((issue) => {
+    return error.issues.map(issue => {
       const field = issue.path[0] as string;
       return {
         type: ConfigIssueType.ERROR,
@@ -601,7 +585,7 @@ export class EnhancedConfigManager {
         message: issue.message,
         field,
         suggestion: this.getFieldSuggestion(field),
-        severity: "high",
+        severity: "high"
       };
     });
   }
@@ -619,25 +603,22 @@ export class EnhancedConfigManager {
       NODE_ENV: "设置为 development、production 或 test",
       ERROR_RETRY_DELAY: "设置为 1000 (1秒)",
       ERROR_MAX_RETRIES: "设置为 3",
+      LDIMS_AUTH_TOKEN: "设置为实际的LDIMS_AUTH_TOKEN"
     };
-    return (
-      suggestions[field] || `请查看 .env.example 文件中的 ${field} 配置示例`
-    );
+    return suggestions[field] || `请查看 .env.example 文件中的 ${field} 配置示例`;
   }
 
   /**
    * 报告验证结果
    */
-  private reportValidationResults(
-    result: EnhancedConfigValidationResult,
-  ): void {
+  private reportValidationResults(result: EnhancedConfigValidationResult): void {
     const { summary, issues } = result;
 
     if (summary.errors > 0) {
       this.logError(`❌ 配置验证失败: ${summary.errors} 个错误`);
       issues
-        .filter((i) => i.type === ConfigIssueType.ERROR)
-        .forEach((issue) => {
+        .filter(i => i.type === ConfigIssueType.ERROR)
+        .forEach(issue => {
           console.error(`   • ${issue.message}`);
           if (issue.suggestion) {
             console.error(`     建议: ${issue.suggestion}`);
@@ -649,8 +630,8 @@ export class EnhancedConfigManager {
       this.log(`⚠️  配置警告: ${summary.warnings} 个警告`);
       if (this.loadOptions.verbose) {
         issues
-          .filter((i) => i.type === ConfigIssueType.WARNING)
-          .forEach((issue) => {
+          .filter(i => i.type === ConfigIssueType.WARNING)
+          .forEach(issue => {
             console.warn(`   • ${issue.message}`);
             if (issue.suggestion) {
               console.warn(`     建议: ${issue.suggestion}`);
@@ -662,8 +643,8 @@ export class EnhancedConfigManager {
     if (summary.suggestions > 0 && this.loadOptions.verbose) {
       this.log(`💡 配置建议: ${summary.suggestions} 个建议`);
       issues
-        .filter((i) => i.type === ConfigIssueType.SUGGESTION)
-        .forEach((issue) => {
+        .filter(i => i.type === ConfigIssueType.SUGGESTION)
+        .forEach(issue => {
           console.log(`   • ${issue.message}`);
           if (issue.suggestion) {
             console.log(`     建议: ${issue.suggestion}`);
@@ -692,7 +673,10 @@ export class EnhancedConfigManager {
 
     console.log("2. ⚙️  必须配置的环境变量:");
     console.log("   LDIMS_API_BASE_URL=http://localhost:3000");
-    console.log("   NODE_ENV=development\n");
+    console.log("   NODE_ENV=development");
+    console.log("   LDIMS_AUTH_TOKEN=your_token_here");
+    console.log("   LDIMS_API_TIMEOUT=30000");
+    console.log("   LDIMS_API_RETRY_COUNT=3\n");
 
     console.log("3. 🔧 可选配置项:");
     console.log("   LDIMS_AUTH_TOKEN=your_token_here");
@@ -838,18 +822,14 @@ export class EnhancedConfigManager {
 /**
  * 获取增强配置管理器实例
  */
-export function getEnhancedConfig(
-  options?: ConfigLoadOptions,
-): EnhancedConfigManager {
+export function getEnhancedConfig(options?: ConfigLoadOptions): EnhancedConfigManager {
   return EnhancedConfigManager.getInstance(options);
 }
 
 /**
  * 创建新的配置管理器实例（主要用于测试）
  */
-export function createEnhancedConfig(
-  options?: ConfigLoadOptions,
-): EnhancedConfigManager {
+export function createEnhancedConfig(options?: ConfigLoadOptions): EnhancedConfigManager {
   EnhancedConfigManager.reset();
   return EnhancedConfigManager.getInstance(options);
 }

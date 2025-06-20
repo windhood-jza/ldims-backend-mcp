@@ -180,6 +180,9 @@ export class LdimsApiService {
         format: format
       });
 
+      console.log(`[LDIMS API] 请求文档文件内容: ${fileId}`);
+      console.log(`[LDIMS API] URL: ${url}?${params.toString()}`);
+
       // 构建请求头
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
@@ -190,9 +193,6 @@ export class LdimsApiService {
       if (this.config.authToken) {
         headers["Authorization"] = `Bearer ${this.config.authToken}`;
       }
-
-      console.log(`[LDIMS API] 请求文档文件内容: ${fileId}`);
-      console.log(`[LDIMS API] URL: ${url}?${params.toString()}`);
 
       // 发送HTTP请求
       const controller = new AbortController();
@@ -354,41 +354,65 @@ export class LdimsApiService {
         throw new LdimsApiError("NO_DATA", "搜索响应缺少数据");
       }
 
-      // 处理LDIMS API响应并转换为MCP格式
+      // 处理LDIMS API响应并转换为MCP格式 - 优化为AI对话场景
       const searchResults: SearchDocumentsResponse = {
         results: (validatedResponse.data.list ?? []).map((result: any) => {
-          // 智能处理匹配内容显示：优先显示文件的extractedContent，然后是remarks
-          let matchedContext = "";
+          // 构建完整的文档内容，包含所有文件的完整内容
+          let fullContent = "";
+          const fileDetails: Array<{ fileId: string; fileName: string; contentLength: number }> = [];
 
-          // 如果有文件且包含extractedContent，优先显示
+          // 处理文档的所有文件
           if (result.files && result.files.length > 0) {
-            const filesWithContent = result.files.filter(
-              (file: any) => file.extractedContent && file.extractedContent.trim()
-            );
-            if (filesWithContent.length > 0) {
-              // 合并所有文件的提取内容
-              matchedContext = filesWithContent
-                .map((file: any) => `[${file.fileName}]:\n${file.extractedContent}`)
-                .join("\n\n---\n\n");
+            const contentParts: string[] = [];
+
+            result.files.forEach((file: any, index: number) => {
+              if (file.extractedContent && file.extractedContent.trim()) {
+                // 为每个文件添加清晰的分隔标识
+                const fileHeader = `=== 文件 ${index + 1}: ${file.fileName} ===`;
+                const fileContent = file.extractedContent.trim();
+                contentParts.push(`${fileHeader}\n${fileContent}`);
+
+                // 记录文件详情
+                fileDetails.push({
+                  fileId: String(file.id),
+                  fileName: file.fileName || `文件${index + 1}`,
+                  contentLength: fileContent.length
+                });
+              }
+            });
+
+            // 合并所有文件内容
+            if (contentParts.length > 0) {
+              fullContent = contentParts.join("\n\n" + "=".repeat(50) + "\n\n");
             }
           }
 
-          // 如果没有文件内容，回退到文档级别的remarks
-          if (!matchedContext && result.remarks) {
-            matchedContext = `[文档备注]: ${result.remarks}`;
+          // 如果没有文件内容，使用文档备注
+          if (!fullContent && result.remarks) {
+            fullContent = `[文档说明]\n${result.remarks}`;
+          }
+
+          // 如果仍然没有内容，提供基本信息
+          if (!fullContent) {
+            fullContent = `[文档信息]\n文档名称: ${result.docName}\n文档类型: ${result.docTypeName}\n提交人: ${result.submitter}\n创建时间: ${result.createdAt}`;
           }
 
           return {
             documentId: String(result.id),
             documentName: result.docName ?? "未知文档",
-            relevanceScore: 0.8, // 暂时固定相关度分数，后续可根据搜索算法优化
-            matchedContext,
+            relevanceScore: 0.8,
+            matchedContext: fullContent, // 现在包含完整内容，不再截断
             metadata: {
               createdAt: result.createdAt ?? new Date().toISOString(),
               submitter: result.submitter ?? "未知",
               documentType: result.docTypeName ?? "未知类型",
               departmentName: result.sourceDepartmentName ?? result.departmentName ?? "未知部门",
-              handoverDate: result.handoverDate
+              handoverDate: result.handoverDate,
+              // 新增：文件详情信息，便于AI理解文档结构
+              fileCount: result.files?.length ?? 0,
+              fileDetails: fileDetails,
+              totalContentLength: fullContent.length,
+              hasMultipleFiles: (result.files?.length ?? 0) > 1
             }
           };
         }),
@@ -396,14 +420,28 @@ export class LdimsApiService {
         searchMetadata: {
           executionTime,
           searchMode: params.filters?.searchMode ?? "semantic",
-          queryProcessed: params.query
+          queryProcessed: params.query,
+          // 新增：内容处理元数据
+          contentProcessing: {
+            fullContentReturned: true,
+            contentNotTruncated: true,
+            optimizedForAI: true
+          }
         }
       };
 
-      this.logger.info("文档搜索完成", {
+      this.logger.info("文档搜索完成（增强版）", {
         query: params.query,
         resultsCount: searchResults.results.length,
-        executionTime
+        executionTime,
+        totalContentLength: searchResults.results.reduce((sum, r) => sum + r.matchedContext.length, 0),
+        avgContentLength:
+          searchResults.results.length > 0
+            ? Math.round(
+                searchResults.results.reduce((sum, r) => sum + r.matchedContext.length, 0) /
+                  searchResults.results.length
+              )
+            : 0
       });
 
       return searchResults;
@@ -426,26 +464,96 @@ export class LdimsApiService {
     try {
       this.logger.debug("获取文档提取内容", { documentId });
 
-      // 使用文件内容API端点，documentId实际上是fileId
-      const response = await this.makeRequest(`/api/v1/documents/files/${documentId}/content`);
+      // 首先尝试通过文档ID获取文档信息和所有文件
+      const documentResponse = await this.makeRequest(`/api/v1/documents/${documentId}`);
 
-      // 处理LDIMS API响应格式: { success: true, data: { fileName, extractedContent, processingStatus, ... }}
+      if (!documentResponse.success || !documentResponse.data) {
+        // 如果获取文档信息失败，尝试直接作为文件ID处理
+        return await this.getDocumentFileContentById(documentId);
+      }
+
+      const document = documentResponse.data;
+      let fullContent = "";
+      let totalFiles = 0;
+      let processedFiles = 0;
+
+      // 如果文档有文件列表，获取所有文件的内容
+      if (document.files && document.files.length > 0) {
+        totalFiles = document.files.length;
+        const contentParts: string[] = [];
+
+        for (const [index, file] of document.files.entries()) {
+          try {
+            if (file.extractedContent && file.extractedContent.trim()) {
+              // 直接使用已提取的内容
+              const fileHeader = `=== 文件 ${index + 1}: ${file.fileName || `文件${file.id}`} ===`;
+              contentParts.push(`${fileHeader}\n${file.extractedContent.trim()}`);
+              processedFiles++;
+            } else if (file.id) {
+              // 尝试获取文件的提取内容
+              try {
+                const fileContentResponse = await this.makeRequest(`/api/v1/documents/files/${file.id}/content`);
+                if (fileContentResponse.success && fileContentResponse.data?.extractedContent) {
+                  const fileHeader = `=== 文件 ${index + 1}: ${file.fileName || `文件${file.id}`} ===`;
+                  contentParts.push(`${fileHeader}\n${fileContentResponse.data.extractedContent.trim()}`);
+                  processedFiles++;
+                }
+              } catch (fileError) {
+                this.logger.warn(`获取文件 ${file.id} 内容失败:`, fileError);
+              }
+            }
+          } catch (fileError) {
+            this.logger.warn(`处理文件 ${file.id || index} 时出错:`, fileError);
+          }
+        }
+
+        if (contentParts.length > 0) {
+          fullContent = contentParts.join("\n\n" + "=".repeat(50) + "\n\n");
+        }
+      }
+
+      // 如果没有获取到文件内容，使用文档基本信息
+      if (!fullContent) {
+        const docInfo = [
+          `文档名称: ${document.docName || "未知"}`,
+          `文档类型: ${document.docTypeName || "未知"}`,
+          `提交人: ${document.submitter || "未知"}`,
+          `创建时间: ${document.createdAt || "未知"}`,
+          `部门: ${document.departmentName || document.sourceDepartmentName || "未知"}`
+        ];
+
+        if (document.remarks) {
+          docInfo.push(`文档说明: ${document.remarks}`);
+        }
+
+        fullContent = `[文档基本信息]\n${docInfo.join("\n")}`;
+      }
+
       const result: DocumentExtractedContentResponse = {
         uri: `ldims://docs/${documentId}/extracted_content`,
-        text: response.data?.extractedContent ?? "",
+        text: fullContent,
         metadata: {
-          documentName: response.data?.fileName ?? `文档-${documentId}`,
-          extractedAt: response.data?.updatedAt ?? response.data?.createdAt ?? new Date().toISOString(),
-          format: response.data?.fileType ?? "text/plain",
+          documentName: document.docName || `文档-${documentId}`,
+          extractedAt: new Date().toISOString(),
+          format: "text/plain",
           documentId,
-          fileSize: response.data?.fileSize ?? 0,
-          processingStatus: response.data?.processingStatus ?? "completed"
+          fileSize: fullContent.length,
+          processingStatus: "completed",
+          // 新增元数据
+          totalFiles,
+          processedFiles,
+          documentType: document.docTypeName,
+          submitter: document.submitter,
+          createdAt: document.createdAt,
+          departmentName: document.departmentName || document.sourceDepartmentName
         }
       };
 
-      this.logger.info("文档内容提取完成", {
+      this.logger.info("文档内容提取完成（增强版）", {
         documentId,
         contentLength: result.text.length,
+        totalFiles,
+        processedFiles,
         format: result.metadata.format
       });
 
@@ -453,11 +561,64 @@ export class LdimsApiService {
     } catch (_error) {
       this.logger.error("文档内容提取失败", _error);
 
+      // 如果作为文档ID失败，尝试作为文件ID处理
+      if (_error instanceof LdimsApiError && _error.code.includes("404")) {
+        this.logger.debug("尝试将ID作为文件ID处理", { documentId });
+        return await this.getDocumentFileContentById(documentId);
+      }
+
       return {
         isError: true,
         errorCode: "CONTENT_EXTRACTION_FAILED",
         errorMessage: _error instanceof Error ? _error.message : "内容提取失败",
         errorDetails: { documentId }
+      };
+    }
+  }
+
+  /**
+   * 通过文件ID获取文档内容（兼容性方法）
+   */
+  private async getDocumentFileContentById(
+    fileId: string
+  ): Promise<DocumentExtractedContentResponse | McpErrorResponse> {
+    try {
+      this.logger.debug("通过文件ID获取内容", { fileId });
+
+      const response = await this.makeRequest(`/api/v1/documents/files/${fileId}/content`);
+
+      if (!response.success || !response.data) {
+        throw new LdimsApiError("FILE_NOT_FOUND", `文件 ${fileId} 不存在或无法访问`);
+      }
+
+      const result: DocumentExtractedContentResponse = {
+        uri: `ldims://docs/${fileId}/extracted_content`,
+        text: response.data.extractedContent || "",
+        metadata: {
+          documentName: response.data.fileName || `文件-${fileId}`,
+          extractedAt: response.data.updatedAt || response.data.createdAt || new Date().toISOString(),
+          format: response.data.fileType || "text/plain",
+          documentId: fileId,
+          fileSize: response.data.fileSize || 0,
+          processingStatus: response.data.processingStatus || "completed"
+        }
+      };
+
+      this.logger.info("文件内容获取完成", {
+        fileId,
+        contentLength: result.text.length,
+        format: result.metadata.format
+      });
+
+      return result;
+    } catch (_error) {
+      this.logger.error("文件内容获取失败", _error);
+
+      return {
+        isError: true,
+        errorCode: "FILE_CONTENT_EXTRACTION_FAILED",
+        errorMessage: _error instanceof Error ? _error.message : "文件内容提取失败",
+        errorDetails: { fileId }
       };
     }
   }

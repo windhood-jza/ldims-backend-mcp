@@ -147,30 +147,20 @@ export interface McpServiceConfig {
  * 获取文档文件内容的参数Schema
  */
 export const GetDocumentFileContentSchema = z.object({
-  file_id: z
-    .string()
-    .min(1, "文件ID不能为空")
-    .describe("LDIMS系统中的文档文件ID"),
-  include_metadata: z
-    .boolean()
-    .optional()
-    .default(false)
-    .describe("是否包含文件元数据信息"),
+  file_id: z.string().min(1, "文件ID不能为空").describe("LDIMS系统中的文档文件ID"),
+  include_metadata: z.boolean().optional().default(false).describe("是否包含文件元数据信息"),
   format: z
     .enum(["text", "base64"])
     .optional()
     .default("text")
-    .describe("返回内容的格式：text(文本) 或 base64(二进制编码)"),
+    .describe("返回内容的格式：text(文本) 或 base64(二进制编码)")
 });
 
 /**
  * 搜索文档工具的参数Schema
  */
 export const SearchDocumentsSchema = z.object({
-  query: z
-    .string()
-    .min(1, "搜索查询不能为空")
-    .describe("自然语言或关键词搜索查询。请具体描述您要查找的信息内容。"),
+  query: z.string().min(1, "搜索查询不能为空").describe("自然语言或关键词搜索查询。请具体描述您要查找的信息内容。"),
   maxResults: z
     .number()
     .int()
@@ -181,24 +171,18 @@ export const SearchDocumentsSchema = z.object({
     .describe("返回结果的最大数量。如需更全面的结果可使用更大的数值。"),
   filters: z
     .object({
-      dateFrom: z
-        .string()
-        .optional()
-        .describe("文档创建/修改起始日期过滤（ISO格式）"),
-      dateTo: z
-        .string()
-        .optional()
-        .describe("文档创建/修改结束日期过滤（ISO格式）"),
+      dateFrom: z.string().optional().describe("文档创建/修改起始日期过滤（ISO格式）"),
+      dateTo: z.string().optional().describe("文档创建/修改结束日期过滤（ISO格式）"),
       documentType: z.string().optional().describe("按文档类型/格式过滤"),
       submitter: z.string().optional().describe("按文档提交人过滤"),
       searchMode: z
         .enum(["exact", "semantic"])
         .optional()
         .default("semantic")
-        .describe("搜索模式：'exact'精确匹配，'semantic'语义匹配"),
+        .describe("搜索模式：'exact'精确匹配，'semantic'语义匹配")
     })
     .optional()
-    .describe("搜索过滤条件"),
+    .describe("搜索过滤条件")
 });
 
 /**
@@ -216,6 +200,11 @@ export interface SearchDocumentsResponse {
       documentType: string;
       departmentName?: string;
       handoverDate?: string;
+      // 增强元数据：文件详情信息，便于AI理解文档结构
+      fileCount?: number;
+      fileDetails?: Array<{ fileId: string; fileName: string; contentLength: number }>;
+      totalContentLength?: number;
+      hasMultipleFiles?: boolean;
     };
   }>;
   totalMatches: number;
@@ -223,6 +212,12 @@ export interface SearchDocumentsResponse {
     executionTime: string;
     searchMode: "exact" | "semantic";
     queryProcessed: string;
+    // 增强元数据：内容处理信息
+    contentProcessing?: {
+      fullContentReturned: boolean;
+      contentNotTruncated: boolean;
+      optimizedForAI: boolean;
+    };
   };
 }
 
@@ -239,6 +234,13 @@ export interface DocumentExtractedContentResponse {
     documentId: string;
     fileSize?: number;
     processingStatus: "completed" | "processing" | "failed";
+    // 增强元数据
+    totalFiles?: number;
+    processedFiles?: number;
+    documentType?: string;
+    submitter?: string;
+    createdAt?: string;
+    departmentName?: string;
   };
 }
 
@@ -307,7 +309,7 @@ export enum McpErrorCode {
   // 系统错误
   INTERNAL_ERROR = "INTERNAL_ERROR",
   UNKNOWN_ERROR = "UNKNOWN_ERROR",
-  SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE",
+  SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE"
 }
 
 /**
@@ -317,7 +319,7 @@ export enum McpErrorSeverity {
   LOW = "low",
   MEDIUM = "medium",
   HIGH = "high",
-  CRITICAL = "critical",
+  CRITICAL = "critical"
 }
 
 /**
@@ -362,7 +364,7 @@ export class McpError extends Error {
       userMessage?: string;
       details?: Record<string, unknown>;
       cause?: Error;
-    } = {},
+    } = {}
   ) {
     super(message);
     this.name = "McpError";
@@ -390,7 +392,7 @@ export class McpError extends Error {
       errorMessage: this.message,
       severity: this.severity,
       timestamp: this.timestamp,
-      recoverable: this.recoverable,
+      recoverable: this.recoverable
     };
 
     if (this.traceId !== undefined) {
@@ -412,14 +414,11 @@ export class McpError extends Error {
   /**
    * 创建参数验证错误
    */
-  static invalidParams(
-    message: string,
-    details?: Record<string, unknown>,
-  ): McpError {
+  static invalidParams(message: string, details?: Record<string, unknown>): McpError {
     const options: any = {
       severity: McpErrorSeverity.LOW,
       recoverable: true,
-      userMessage: "请检查输入参数是否正确",
+      userMessage: "请检查输入参数是否正确"
     };
     if (details !== undefined) {
       options.details = details;
@@ -430,34 +429,24 @@ export class McpError extends Error {
   /**
    * 创建资源未找到错误
    */
-  static resourceNotFound(
-    resourceUri: string,
-    details?: Record<string, unknown>,
-  ): McpError {
-    return new McpError(
-      McpErrorCode.RESOURCE_NOT_FOUND,
-      `资源未找到: ${resourceUri}`,
-      {
-        severity: McpErrorSeverity.MEDIUM,
-        recoverable: false,
-        userMessage: "请求的资源不存在，请检查资源标识符",
-        details: { resourceUri, ...details },
-      },
-    );
+  static resourceNotFound(resourceUri: string, details?: Record<string, unknown>): McpError {
+    return new McpError(McpErrorCode.RESOURCE_NOT_FOUND, `资源未找到: ${resourceUri}`, {
+      severity: McpErrorSeverity.MEDIUM,
+      recoverable: false,
+      userMessage: "请求的资源不存在，请检查资源标识符",
+      details: { resourceUri, ...details }
+    });
   }
 
   /**
    * 创建API连接错误
    */
-  static apiConnectionFailed(
-    message: string,
-    details?: Record<string, unknown>,
-  ): McpError {
+  static apiConnectionFailed(message: string, details?: Record<string, unknown>): McpError {
     const options: any = {
       severity: McpErrorSeverity.HIGH,
       recoverable: true,
       retryAfter: 5000, // 5秒后重试
-      userMessage: "服务暂时不可用，请稍后重试",
+      userMessage: "服务暂时不可用，请稍后重试"
     };
     if (details !== undefined) {
       options.details = details;
@@ -468,15 +457,11 @@ export class McpError extends Error {
   /**
    * 创建内部错误
    */
-  static internalError(
-    message: string,
-    cause?: Error,
-    details?: Record<string, unknown>,
-  ): McpError {
+  static internalError(message: string, cause?: Error, details?: Record<string, unknown>): McpError {
     const options: any = {
       severity: McpErrorSeverity.CRITICAL,
       recoverable: false,
-      userMessage: "系统内部错误，请联系管理员",
+      userMessage: "系统内部错误，请联系管理员"
     };
     if (cause !== undefined) {
       options.cause = cause;
@@ -489,9 +474,7 @@ export class McpError extends Error {
 }
 
 // 导出参数类型
-export type GetDocumentFileContentParams = z.infer<
-  typeof GetDocumentFileContentSchema
->;
+export type GetDocumentFileContentParams = z.infer<typeof GetDocumentFileContentSchema>;
 export type SearchDocumentsParams = z.infer<typeof SearchDocumentsSchema>;
 
 /**
@@ -499,21 +482,18 @@ export type SearchDocumentsParams = z.infer<typeof SearchDocumentsSchema>;
  */
 export const EnvironmentConfigSchema = z.object({
   // LDIMS API配置
-  LDIMS_API_BASE_URL: z
-    .string()
-    .url("无效的LDIMS API URL")
-    .default("http://localhost:3000"),
+  LDIMS_API_BASE_URL: z.string().url("无效的LDIMS API URL").default("http://localhost:3000"),
   LDIMS_API_VERSION: z.string().default("v1"),
   LDIMS_AUTH_TOKEN: z.string().optional(),
   LDIMS_API_TIMEOUT: z
     .string()
     .transform(Number)
-    .refine((n) => n > 0, "超时时间必须大于0")
+    .refine(n => n > 0, "超时时间必须大于0")
     .default("30000"),
   LDIMS_API_RETRY_COUNT: z
     .string()
     .transform(Number)
-    .refine((n) => n >= 0, "重试次数不能为负数")
+    .refine(n => n >= 0, "重试次数不能为负数")
     .default("3"),
 
   // 日志配置
@@ -526,29 +506,27 @@ export const EnvironmentConfigSchema = z.object({
   MCP_SERVER_VERSION: z.string().default("1.0.0"),
 
   // 环境设置
-  NODE_ENV: z
-    .enum(["development", "production", "test"])
-    .default("development"),
+  NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
 
   // 错误处理配置
   ERROR_DETAILED: z
     .string()
-    .transform((val) => val === "true")
+    .transform(val => val === "true")
     .optional(),
   ERROR_STACK_TRACE: z
     .string()
-    .transform((val) => val === "true")
+    .transform(val => val === "true")
     .optional(),
   ERROR_RETRY_DELAY: z
     .string()
     .transform(Number)
-    .refine((n) => n >= 0, "重试延迟不能为负数")
+    .refine(n => n >= 0, "重试延迟不能为负数")
     .optional(),
   ERROR_MAX_RETRIES: z
     .string()
     .transform(Number)
-    .refine((n) => n >= 0, "最大重试次数不能为负数")
-    .optional(),
+    .refine(n => n >= 0, "最大重试次数不能为负数")
+    .optional()
 });
 
 export type EnvironmentConfig = z.infer<typeof EnvironmentConfigSchema>;
