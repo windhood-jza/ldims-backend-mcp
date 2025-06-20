@@ -11,33 +11,75 @@ import {
   type SearchDocumentsResponse,
   type DocumentExtractedContentResponse,
   type McpErrorResponse,
-  SearchDocumentsSchema,
+  SearchDocumentsSchema
 } from "../types/mcp.js";
 
 /**
- * LDIMS API响应结构
+ * LDIMS API响应结构 - 匹配真实后端格式
  */
 const LdimsDocumentFileResponse = z.object({
   success: z.boolean(),
   data: z
     .object({
-      file_id: z.string(),
-      filename: z.string(),
-      content: z.string(),
-      size: z.number(),
-      mime_type: z.string(),
-      created_at: z.string(),
-      updated_at: z.string().optional(),
-      file_hash: z.string().optional(),
+      id: z.union([z.string(), z.number()]).optional(),
+      fileName: z.string().optional(),
+      extractedContent: z.string().optional(),
+      fileSize: z.number().optional(),
+      fileType: z.string().optional(),
+      createdAt: z.string().optional(),
+      updatedAt: z.string().optional(),
+      processingStatus: z.string().optional()
     })
     .optional(),
+  message: z.string().optional(),
   error: z
     .object({
       code: z.string(),
       message: z.string(),
-      details: z.unknown().optional(),
+      details: z.unknown().optional()
     })
-    .optional(),
+    .optional()
+});
+
+/**
+ * LDIMS 文档搜索API响应结构 - 匹配后端实际格式
+ */
+const LdimsSearchResponse = z.object({
+  code: z.number(),
+  message: z.string(),
+  data: z
+    .object({
+      list: z.array(
+        z.object({
+          id: z.union([z.string(), z.number()]),
+          docName: z.string().nullish(),
+          extractedContent: z.string().nullish(),
+          remarks: z.string().nullish(),
+          createdAt: z.string().nullish(),
+          submitter: z.string().nullish(),
+          docTypeName: z.string().nullish(),
+          sourceDepartmentName: z.string().nullish(),
+          departmentName: z.string().nullish(),
+          handoverDate: z.string().nullish(),
+          fileCount: z.number().nullish(),
+          files: z
+            .array(
+              z.object({
+                id: z.number(),
+                fileName: z.string(),
+                extractedContent: z.string().nullish(),
+                fileType: z.string().nullish(),
+                processingStatus: z.string().nullish()
+              })
+            )
+            .optional()
+        })
+      ),
+      total: z.number(),
+      page: z.number().nullish(),
+      pageSize: z.number().nullish()
+    })
+    .nullish()
 });
 
 /**
@@ -72,7 +114,7 @@ export class LdimsApiService {
     const url = `${this.config.baseUrl}${endpoint}`;
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
-      "User-Agent": "LDIMS-MCP-Service/1.0.0",
+      "User-Agent": "LDIMS-MCP-Service/1.0.0"
     };
 
     if (this.config.authToken) {
@@ -80,16 +122,13 @@ export class LdimsApiService {
     }
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(
-      () => controller.abort(),
-      this.config.timeout ?? 30000
-    );
+    const timeoutId = setTimeout(() => controller.abort(), this.config.timeout ?? 30000);
 
     try {
       const response = await fetch(url, {
         method: "GET",
         headers,
-        signal: controller.signal,
+        signal: controller.signal
       });
 
       clearTimeout(timeoutId);
@@ -132,19 +171,19 @@ export class LdimsApiService {
     format: "text" | "base64" = "text"
   ): Promise<DocumentFileContentResponse> {
     try {
-      // 构建API URL
-      const url = `${this.config.baseUrl}/api/${this.config.version}/files/${fileId}/content`;
+      // 构建API URL - 匹配LDIMS后端实际端点
+      const url = `${this.config.baseUrl}/api/v1/documents/files/${fileId}/content`;
 
       // 构建请求参数
       const params = new URLSearchParams({
         include_metadata: includeMetadata.toString(),
-        format: format,
+        format: format
       });
 
       // 构建请求头
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
-        "User-Agent": "LDIMS-MCP-Service/1.0.0",
+        "User-Agent": "LDIMS-MCP-Service/1.0.0"
       };
 
       // 添加认证头（如果有）
@@ -157,16 +196,13 @@ export class LdimsApiService {
 
       // 发送HTTP请求
       const controller = new AbortController();
-      const timeoutId = setTimeout(
-        () => controller.abort(),
-        this.config.timeout
-      );
+      const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
 
       try {
         const response = await fetch(`${url}?${params.toString()}`, {
           method: "GET",
           headers,
-          signal: controller.signal,
+          signal: controller.signal
         });
 
         clearTimeout(timeoutId);
@@ -196,25 +232,22 @@ export class LdimsApiService {
           throw new LdimsApiError("NO_DATA", "API response missing data field");
         }
 
-        // 转换为MCP格式
+        // 转换为MCP格式 - 处理LDIMS API响应格式
         const result: DocumentFileContentResponse = {
-          file_id: validatedResponse.data.file_id,
-          content: validatedResponse.data.content,
+          file_id: String(validatedResponse.data.id ?? fileId),
+          content: validatedResponse.data.extractedContent ?? "",
           format: format,
           ...(includeMetadata && {
             metadata: {
-              filename: validatedResponse.data.filename,
-              size: validatedResponse.data.size,
-              created_at: validatedResponse.data.created_at,
-              mime_type: validatedResponse.data.mime_type,
-              ...(validatedResponse.data.updated_at && {
-                updated_at: validatedResponse.data.updated_at,
-              }),
-              ...(validatedResponse.data.file_hash && {
-                hash: validatedResponse.data.file_hash,
-              }),
-            },
-          }),
+              filename: validatedResponse.data.fileName ?? "未知文件",
+              size: validatedResponse.data.fileSize ?? 0,
+              created_at: validatedResponse.data.createdAt ?? new Date().toISOString(),
+              mime_type: validatedResponse.data.fileType ?? "text/plain",
+              ...(validatedResponse.data.updatedAt && {
+                updated_at: validatedResponse.data.updatedAt
+              })
+            }
+          })
         };
 
         console.log(`[LDIMS API] 成功获取文件内容: ${fileId}`);
@@ -232,23 +265,14 @@ export class LdimsApiService {
 
       if (_error instanceof Error) {
         if (_error.name === "AbortError") {
-          throw new LdimsApiError(
-            "TIMEOUT",
-            `Request timeout after ${this.config.timeout}ms`
-          );
+          throw new LdimsApiError("TIMEOUT", `Request timeout after ${this.config.timeout}ms`);
         }
 
         if (_error.message.includes("fetch")) {
-          throw new LdimsApiError(
-            "NETWORK_ERROR",
-            `Network request failed: ${_error.message}`
-          );
+          throw new LdimsApiError("NETWORK_ERROR", `Network request failed: ${_error.message}`);
         }
 
-        throw new LdimsApiError(
-          "INTERNAL_ERROR",
-          `Internal error: ${_error.message}`
-        );
+        throw new LdimsApiError("INTERNAL_ERROR", `Internal error: ${_error.message}`);
       }
 
       throw new LdimsApiError("UNKNOWN_ERROR", "An unknown error occurred");
@@ -260,13 +284,13 @@ export class LdimsApiService {
    */
   async checkHealth(): Promise<boolean> {
     try {
-      const url = `${this.config.baseUrl}/api/${this.config.version}/health`;
+      const url = `${this.config.baseUrl}/api/v1/health`;
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒超时
 
       const response = await fetch(url, {
         method: "GET",
-        signal: controller.signal,
+        signal: controller.signal
       });
 
       clearTimeout(timeoutId);
@@ -294,75 +318,92 @@ export class LdimsApiService {
       this.logger.debug("搜索文档请求", {
         query: params.query,
         maxResults: params.maxResults,
-        filters: params.filters,
+        filters: params.filters
       });
 
-      // 构建查询参数
+      // 构建查询参数 - 匹配LDIMS后端API
       const queryParams = new URLSearchParams({
-        query: params.query,
-        limit: String(params.maxResults ?? 5),
+        searchText: params.query,
+        pageSize: String(params.maxResults ?? 10),
+        page: "1"
       });
 
       // 添加过滤条件
       if (params.filters) {
-        if (params.filters.dateFrom)
-          queryParams.append("date_from", params.filters.dateFrom);
-        if (params.filters.dateTo)
-          queryParams.append("date_to", params.filters.dateTo);
-        if (params.filters.documentType)
-          queryParams.append("document_type", params.filters.documentType);
-        if (params.filters.submitter)
-          queryParams.append("submitter", params.filters.submitter);
-        if (params.filters.searchMode)
-          queryParams.append("search_mode", params.filters.searchMode);
+        if (params.filters.dateFrom) queryParams.append("startDate", params.filters.dateFrom);
+        if (params.filters.dateTo) queryParams.append("endDate", params.filters.dateTo);
+        if (params.filters.documentType) queryParams.append("docTypeName", params.filters.documentType);
+        if (params.filters.submitter) queryParams.append("submitter", params.filters.submitter);
+        // 排序参数
+        queryParams.append("sortField", "createdAt");
+        queryParams.append("sortOrder", "DESC");
       }
 
       const startTime = Date.now();
-      const response = await this.makeRequest(
-        `/api/v1/documents/search?${queryParams.toString()}`
-      );
+      const response = await this.makeRequest(`/api/v1/documents/search/content?${queryParams.toString()}`);
       const executionTime = `${Date.now() - startTime}ms`;
 
-      // 处理API响应并转换为MCP格式
+      // 验证响应格式
+      const validatedResponse = LdimsSearchResponse.parse(response);
+
+      if (validatedResponse.code !== 200) {
+        throw new LdimsApiError("SEARCH_FAILED", validatedResponse.message ?? "搜索请求失败");
+      }
+
+      if (!validatedResponse.data) {
+        throw new LdimsApiError("NO_DATA", "搜索响应缺少数据");
+      }
+
+      // 处理LDIMS API响应并转换为MCP格式
       const searchResults: SearchDocumentsResponse = {
-        results: (response.data?.results ?? []).map((result: any) => ({
-          documentId: result.document_id ?? result.id,
-          documentName: result.document_name ?? result.name ?? "未知文档",
-          relevanceScore: result.relevance_score ?? result.score ?? 0.5,
-          matchedContext:
-            result.matched_context ??
-            result.snippet ??
-            result.content?.substring(0, 200) ??
-            "",
-          metadata: {
-            createdAt:
-              result.created_at ?? result.createdAt ?? new Date().toISOString(),
-            submitter: result.submitter ?? result.author ?? "未知",
-            documentType:
-              result.document_type ??
-              result.type ??
-              result.file_type ??
-              "未知类型",
-            departmentName: result.department_name ?? result.department,
-            handoverDate: result.handover_date ?? result.handoverDate,
-          },
-        })),
-        totalMatches:
-          response.data?.total ??
-          response.data?.count ??
-          response.data?.results?.length ??
-          0,
+        results: (validatedResponse.data.list ?? []).map((result: any) => {
+          // 智能处理匹配内容显示：优先显示文件的extractedContent，然后是remarks
+          let matchedContext = "";
+
+          // 如果有文件且包含extractedContent，优先显示
+          if (result.files && result.files.length > 0) {
+            const filesWithContent = result.files.filter(
+              (file: any) => file.extractedContent && file.extractedContent.trim()
+            );
+            if (filesWithContent.length > 0) {
+              // 合并所有文件的提取内容
+              matchedContext = filesWithContent
+                .map((file: any) => `[${file.fileName}]:\n${file.extractedContent}`)
+                .join("\n\n---\n\n");
+            }
+          }
+
+          // 如果没有文件内容，回退到文档级别的remarks
+          if (!matchedContext && result.remarks) {
+            matchedContext = `[文档备注]: ${result.remarks}`;
+          }
+
+          return {
+            documentId: String(result.id),
+            documentName: result.docName ?? "未知文档",
+            relevanceScore: 0.8, // 暂时固定相关度分数，后续可根据搜索算法优化
+            matchedContext,
+            metadata: {
+              createdAt: result.createdAt ?? new Date().toISOString(),
+              submitter: result.submitter ?? "未知",
+              documentType: result.docTypeName ?? "未知类型",
+              departmentName: result.sourceDepartmentName ?? result.departmentName ?? "未知部门",
+              handoverDate: result.handoverDate
+            }
+          };
+        }),
+        totalMatches: validatedResponse.data.total ?? 0,
         searchMetadata: {
           executionTime,
           searchMode: params.filters?.searchMode ?? "semantic",
-          queryProcessed: params.query,
-        },
+          queryProcessed: params.query
+        }
       };
 
       this.logger.info("文档搜索完成", {
         query: params.query,
         resultsCount: searchResults.results.length,
-        executionTime,
+        executionTime
       });
 
       return searchResults;
@@ -373,7 +414,7 @@ export class LdimsApiService {
         isError: true,
         errorCode: "SEARCH_FAILED",
         errorMessage: _error instanceof Error ? _error.message : "搜索失败",
-        errorDetails: { query: params.query, filters: params.filters },
+        errorDetails: { query: params.query, filters: params.filters }
       };
     }
   }
@@ -381,49 +422,31 @@ export class LdimsApiService {
   /**
    * 获取文档的提取内容
    */
-  async getDocumentExtractedContent(
-    documentId: string
-  ): Promise<DocumentExtractedContentResponse | McpErrorResponse> {
+  async getDocumentExtractedContent(documentId: string): Promise<DocumentExtractedContentResponse | McpErrorResponse> {
     try {
       this.logger.debug("获取文档提取内容", { documentId });
 
-      const response = await this.makeRequest(
-        `/api/v1/documents/${documentId}/extracted-content`
-      );
+      // 使用文件内容API端点，documentId实际上是fileId
+      const response = await this.makeRequest(`/api/v1/documents/files/${documentId}/content`);
 
+      // 处理LDIMS API响应格式: { success: true, data: { fileName, extractedContent, processingStatus, ... }}
       const result: DocumentExtractedContentResponse = {
         uri: `ldims://docs/${documentId}/extracted_content`,
-        text:
-          response.data?.content ??
-          response.data?.text ??
-          response.data?.extracted_content ??
-          "",
+        text: response.data?.extractedContent ?? "",
         metadata: {
-          documentName:
-            response.data?.document_name ??
-            response.data?.name ??
-            `文档-${documentId}`,
-          extractedAt:
-            response.data?.extracted_at ??
-            response.data?.extractedAt ??
-            new Date().toISOString(),
-          format:
-            response.data?.format ??
-            response.data?.content_type ??
-            "text/plain",
+          documentName: response.data?.fileName ?? `文档-${documentId}`,
+          extractedAt: response.data?.updatedAt ?? response.data?.createdAt ?? new Date().toISOString(),
+          format: response.data?.fileType ?? "text/plain",
           documentId,
-          fileSize: response.data?.file_size ?? response.data?.size,
-          processingStatus:
-            response.data?.processing_status ??
-            response.data?.status ??
-            "completed",
-        },
+          fileSize: response.data?.fileSize ?? 0,
+          processingStatus: response.data?.processingStatus ?? "completed"
+        }
       };
 
       this.logger.info("文档内容提取完成", {
         documentId,
         contentLength: result.text.length,
-        format: result.metadata.format,
+        format: result.metadata.format
       });
 
       return result;
@@ -434,7 +457,7 @@ export class LdimsApiService {
         isError: true,
         errorCode: "CONTENT_EXTRACTION_FAILED",
         errorMessage: _error instanceof Error ? _error.message : "内容提取失败",
-        errorDetails: { documentId },
+        errorDetails: { documentId }
       };
     }
   }

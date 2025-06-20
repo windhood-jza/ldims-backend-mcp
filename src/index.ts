@@ -6,7 +6,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
   ReadResourceRequestSchema,
-  ListResourcesRequestSchema,
+  ListResourcesRequestSchema
 } from "@modelcontextprotocol/sdk/types.js";
 import { ConfigManager } from "./config/index.js";
 import { LdimsApiService } from "./services/ldims-api.js";
@@ -18,7 +18,7 @@ import {
   McpErrorCode,
   type SearchDocumentsResponse,
   type DocumentExtractedContentResponse,
-  type McpErrorResponse,
+  type McpErrorResponse
 } from "./types/mcp.js";
 
 // 全局配置和服务实例
@@ -29,14 +29,14 @@ let ldimsApi: LdimsApiService;
 const server = new Server(
   {
     name: "ldims-mcp-server",
-    version: "1.0.0",
+    version: "1.0.0"
   },
   {
     capabilities: {
       tools: {},
-      resources: {},
-    },
-  },
+      resources: {}
+    }
+  }
 );
 
 /**
@@ -47,51 +47,147 @@ function isErrorResponse(response: any): response is McpErrorResponse {
 }
 
 /**
- * 开发模式下的Mock数据生成器
+ * P3-T2: 增强的Mock数据生成器
+ * 更智能地根据查询内容生成相关的模拟搜索结果
+ *
+ * 注意：此功能已被禁用，系统现在直接返回API错误而不是Mock数据
  */
+/*
 function createMockSearchResults(query: string): SearchDocumentsResponse {
-  const mockResults = [
-    {
-      documentId: "mock-doc-1",
-      documentName: `与"${query}"相关的重要文档.pdf`,
-      relevanceScore: 0.95,
-      matchedContext: `这是一个关于${query}的详细说明文档，包含了相关的技术规范和实施指南...`,
+  console.log(`[P3-T2] 生成Mock搜索结果，查询: "${query}"`);
+
+  // 根据查询内容智能生成相关的文档类型和内容
+  const queryLower = query.toLowerCase();
+  const isAPIRelated = queryLower.includes("api") || queryLower.includes("接口");
+  const isSystemRelated = queryLower.includes("系统") || queryLower.includes("配置");
+  const isDocumentRelated = queryLower.includes("文档") || queryLower.includes("说明");
+  const isTestRelated = queryLower.includes("测试") || queryLower.includes("test");
+
+  const mockResults = [];
+
+  // 生成第一个高相关度文档
+  if (isAPIRelated) {
+    mockResults.push({
+      documentId: "mock-api-doc-001",
+      documentName: `${query} API技术规范文档.pdf`,
+      relevanceScore: 0.94,
+      matchedContext: `本文档详细描述了${query}相关的API接口设计、调用方法和最佳实践。包含完整的接口定义、参数说明、响应格式和错误处理机制...`,
       metadata: {
         createdAt: "2024-01-15T10:30:00Z",
-        submitter: "张三",
+        submitter: "API架构师",
         documentType: "PDF",
-        departmentName: "技术部",
-        handoverDate: "2024-01-10T00:00:00Z",
-      },
-    },
-    {
-      documentId: "mock-doc-2",
-      documentName: `${query}操作手册.docx`,
-      relevanceScore: 0.87,
-      matchedContext: `本手册详细介绍了${query}的操作流程和注意事项，适用于新员工培训...`,
+        departmentName: "技术架构部",
+        handoverDate: "2024-01-10T00:00:00Z"
+      }
+    });
+  } else if (isSystemRelated) {
+    mockResults.push({
+      documentId: "mock-sys-doc-001",
+      documentName: `${query}系统配置指南.docx`,
+      relevanceScore: 0.91,
+      matchedContext: `${query}系统的完整配置指南，包含环境搭建、参数调优、监控配置等关键信息，适用于系统管理员和运维人员...`,
       metadata: {
         createdAt: "2024-01-12T14:20:00Z",
-        submitter: "李四",
+        submitter: "系统管理员",
         documentType: "Word",
-        departmentName: "人事部",
-      },
-    },
-  ];
+        departmentName: "运维部",
+        handoverDate: "2024-01-08T00:00:00Z"
+      }
+    });
+  } else {
+    mockResults.push({
+      documentId: "mock-general-doc-001",
+      documentName: `关于"${query}"的重要文档.pdf`,
+      relevanceScore: 0.89,
+      matchedContext: `这是一个关于${query}的综合性文档，涵盖了相关的概念、实施方案、注意事项和最佳实践，为团队提供全面的指导...`,
+      metadata: {
+        createdAt: "2024-01-20T09:15:00Z",
+        submitter: "项目经理",
+        documentType: "PDF",
+        departmentName: "项目管理部",
+        handoverDate: "2024-01-18T00:00:00Z"
+      }
+    });
+  }
+
+  // 生成第二个中等相关度文档
+  if (isTestRelated) {
+    mockResults.push({
+      documentId: "mock-test-doc-002",
+      documentName: `${query}测试用例和验证方案.xlsx`,
+      relevanceScore: 0.82,
+      matchedContext: `${query}相关功能的测试用例设计文档，包含功能测试、性能测试、安全测试等多个维度的验证方案和预期结果...`,
+      metadata: {
+        createdAt: "2024-01-18T16:45:00Z",
+        submitter: "测试工程师",
+        documentType: "Excel",
+        departmentName: "质量保证部",
+        handoverDate: "2024-01-15T00:00:00Z"
+      }
+    });
+  } else if (isDocumentRelated) {
+    mockResults.push({
+      documentId: "mock-doc-handbook-002",
+      documentName: `${query}操作手册和培训资料.pptx`,
+      relevanceScore: 0.85,
+      matchedContext: `${query}的操作手册，包含详细的操作流程、常见问题解答和培训课件，适用于新员工培训和日常操作参考...`,
+      metadata: {
+        createdAt: "2024-01-14T11:30:00Z",
+        submitter: "培训专员",
+        documentType: "PowerPoint",
+        departmentName: "人力资源部"
+      }
+    });
+  } else {
+    mockResults.push({
+      documentId: "mock-ref-doc-002",
+      documentName: `${query}参考资料汇编.docx`,
+      relevanceScore: 0.78,
+      matchedContext: `${query}相关的参考资料和案例分析，包含行业最佳实践、经验总结和常见问题的解决方案，为团队提供参考...`,
+      metadata: {
+        createdAt: "2024-01-16T13:20:00Z",
+        submitter: "业务分析师",
+        documentType: "Word",
+        departmentName: "业务发展部",
+        handoverDate: "2024-01-12T00:00:00Z"
+      }
+    });
+  }
+
+  // 根据查询复杂度可能添加第三个文档
+  if (query.length > 5) {
+    mockResults.push({
+      documentId: "mock-related-doc-003",
+      documentName: `${query}相关技术调研报告.pdf`,
+      relevanceScore: 0.73,
+      matchedContext: `针对${query}进行的技术调研和可行性分析报告，包含技术选型建议、实施方案对比和风险评估...`,
+      metadata: {
+        createdAt: "2024-01-10T08:45:00Z",
+        submitter: "技术顾问",
+        documentType: "PDF",
+        departmentName: "技术研发部",
+        handoverDate: "2024-01-08T00:00:00Z"
+      }
+    });
+  }
+
+  const totalResults = mockResults.length;
+  console.log(`[P3-T2] ✅ 生成了 ${totalResults} 个Mock搜索结果`);
 
   return {
     results: mockResults,
-    totalMatches: mockResults.length,
+    totalMatches: totalResults,
     searchMetadata: {
-      executionTime: "45ms",
+      executionTime: `${Math.floor(Math.random() * 50 + 30)}ms`, // 模拟真实的响应时间
       searchMode: "semantic",
-      queryProcessed: query,
-    },
+      queryProcessed: query
+    }
   };
 }
+*/
 
-function createMockExtractedContent(
-  documentId: string,
-): DocumentExtractedContentResponse {
+/*
+function createMockExtractedContent(documentId: string): DocumentExtractedContentResponse {
   return {
     uri: `ldims://docs/${documentId}/extracted_content`,
     text: `这是文档 ${documentId} 的提取内容。
@@ -107,33 +203,41 @@ function createMockExtractedContent(
 
 技术要求：
 - 系统环境配置
-- 依赖组件安装
-- 配置文件设置
-- 测试验证流程
+- 依赖项安装和配置  
+- 性能优化设置
+- 安全配置要求
 
-操作说明：
-1. 首先进行环境检查
-2. 按照配置清单进行设置
-3. 执行测试验证
-4. 记录操作日志
+操作流程：
+1. 环境准备和初始化
+2. 系统配置和参数调优
+3. 功能测试和验证
+4. 部署上线和监控
 
 注意事项：
-- 操作前请备份重要数据
-- 严格按照流程执行
-- 遇到问题及时反馈
-- 保持操作记录完整
+- 严格按照操作流程执行
+- 及时备份重要数据
+- 监控系统运行状态
+- 定期进行安全检查
 
-这是一个详细的技术文档，为相关工作提供了全面的指导。`,
+常见问题：
+Q: 如何解决配置错误？
+A: 检查配置文件格式和参数设置，确保符合规范要求。
+
+Q: 性能优化有哪些方法？
+A: 可以通过调整系统参数、优化数据库配置、使用缓存等方式提升性能。
+
+更多详细信息请参考相关技术文档和操作手册。`,
     metadata: {
-      documentName: `模拟文档-${documentId}`,
+      documentName: `Mock文档-${documentId}`,
       extractedAt: new Date().toISOString(),
       format: "text/plain",
       documentId,
       fileSize: 2048,
-      processingStatus: "completed",
-    },
+      processingStatus: "completed" as const
+    }
   };
 }
+*/
 
 // 工具列表处理
 server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -147,64 +251,61 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {
             file_id: {
               type: "string",
-              description: "文档的唯一标识符",
-            },
+              description: "文档的唯一标识符"
+            }
           },
-          required: ["file_id"],
-        },
+          required: ["file_id"]
+        }
       },
       {
         name: "searchDocuments",
-        description:
-          "在LDIMS系统中搜索文档。支持自然语言查询和语义搜索，帮助用户快速找到相关文档。",
+        description: "在LDIMS系统中搜索文档。支持自然语言查询和语义搜索，帮助用户快速找到相关文档。",
         inputSchema: {
           type: "object",
           properties: {
             query: {
               type: "string",
-              description:
-                "自然语言或关键词搜索查询。请具体描述您要查找的信息内容。",
+              description: "自然语言或关键词搜索查询。请具体描述您要查找的信息内容。"
             },
             maxResults: {
               type: "number",
-              description:
-                "返回结果的最大数量。如需更全面的结果可使用更大的数值。",
+              description: "返回结果的最大数量。如需更全面的结果可使用更大的数值。",
               minimum: 1,
               maximum: 50,
-              default: 5,
+              default: 5
             },
             filters: {
               type: "object",
               properties: {
                 dateFrom: {
                   type: "string",
-                  description: "文档创建/修改起始日期过滤（ISO格式）",
+                  description: "文档创建/修改起始日期过滤（ISO格式）"
                 },
                 dateTo: {
                   type: "string",
-                  description: "文档创建/修改结束日期过滤（ISO格式）",
+                  description: "文档创建/修改结束日期过滤（ISO格式）"
                 },
                 documentType: {
                   type: "string",
-                  description: "按文档类型/格式过滤",
+                  description: "按文档类型/格式过滤"
                 },
                 submitter: {
                   type: "string",
-                  description: "按文档提交人过滤",
+                  description: "按文档提交人过滤"
                 },
                 searchMode: {
                   type: "string",
                   enum: ["exact", "semantic"],
                   description: "搜索模式：'exact'精确匹配，'semantic'语义匹配",
-                  default: "semantic",
-                },
-              },
-            },
+                  default: "semantic"
+                }
+              }
+            }
           },
-          required: ["query"],
-        },
-      },
-    ],
+          required: ["query"]
+        }
+      }
+    ]
   };
 });
 
@@ -215,16 +316,15 @@ server.setRequestHandler(ListResourcesRequestSchema, async () => {
       {
         uri: "ldims://docs/{document_id}/extracted_content",
         name: "LDIMS文档提取内容",
-        description:
-          "获取LDIMS系统中文档的提取文本内容，支持各种文档格式的内容提取",
-        mimeType: "text/plain",
-      },
-    ],
+        description: "获取LDIMS系统中文档的提取文本内容，支持各种文档格式的内容提取",
+        mimeType: "text/plain"
+      }
+    ]
   };
 });
 
 // 工具调用处理
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
+server.setRequestHandler(CallToolRequestSchema, async request => {
   const { name, arguments: args } = request.params;
 
   try {
@@ -237,11 +337,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         try {
           const result = await globalErrorHandler.executeWithRetry(
             async () => {
-              return await ldimsApi.getDocumentFileContent(
-                validatedArgs.file_id,
-              );
+              return await ldimsApi.getDocumentFileContent(validatedArgs.file_id);
             },
-            { tool: name, fileId: validatedArgs.file_id },
+            { tool: name, fileId: validatedArgs.file_id }
           );
 
           return {
@@ -257,9 +355,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 最后修改: ${result.metadata?.updated_at ?? result.metadata?.created_at ?? "未知"}
 
 文件内容:
-${result.content}`,
-              },
-            ],
+${result.content}`
+              }
+            ]
           };
         } catch (_error) {
           const mcpError = handleMcpError(_error);
@@ -267,10 +365,10 @@ ${result.content}`,
             content: [
               {
                 type: "text",
-                text: mcpError.userMessage ?? mcpError.message,
-              },
+                text: mcpError.userMessage ?? mcpError.message
+              }
             ],
-            isError: true,
+            isError: true
           };
         }
       }
@@ -279,29 +377,69 @@ ${result.content}`,
         // 验证参数
         const validatedArgs = SearchDocumentsSchema.parse(args);
 
-        // 尝试调用真实API，失败时使用Mock数据
+        console.log(`[P3-T2] 开始文档搜索: "${validatedArgs.query}"`);
+        console.log(
+          `[P3-T2] 搜索参数: maxResults=${validatedArgs.maxResults}, filters=${JSON.stringify(validatedArgs.filters || {})}`
+        );
+
+        // 尝试调用真实API
         let result: SearchDocumentsResponse | McpErrorResponse;
 
         try {
-          result = await ldimsApi.searchDocuments(validatedArgs);
-        } catch (_error) {
-          console.warn("搜索API调用失败，使用Mock数据:", _error);
-          result = createMockSearchResults(validatedArgs.query);
-        }
+          console.log("[P3-T2] 尝试调用真实LDIMS API...");
 
-        if (isErrorResponse(result)) {
-          console.warn("API错误，使用Mock数据:", result.errorMessage);
-          result = createMockSearchResults(validatedArgs.query);
+          result = await globalErrorHandler.executeWithRetry(
+            async () => {
+              return await ldimsApi.searchDocuments(validatedArgs);
+            },
+            {
+              tool: "searchDocuments",
+              query: validatedArgs.query,
+              maxResults: validatedArgs.maxResults
+            }
+          );
+
+          if (isErrorResponse(result)) {
+            // 直接返回API错误，不使用Mock数据
+            throw new McpError(McpErrorCode.API_SERVER_ERROR, `LDIMS API搜索失败: ${result.errorMessage}`, {
+              userMessage: `文档搜索失败: ${result.errorMessage}`,
+              details: {
+                query: validatedArgs.query,
+                errorCode: result.errorCode,
+                errorDetails: result.errorDetails
+              }
+            });
+          } else {
+            console.log(`[P3-T2] ✅ 真实API调用成功！找到 ${result.results.length} 个文档`);
+          }
+        } catch (_error) {
+          // 直接抛出错误，不使用Mock数据
+          if (_error instanceof McpError) {
+            throw _error;
+          }
+
+          const errorMessage = _error instanceof Error ? _error.message : String(_error);
+          console.error(`[P3-T2] API连接失败: ${errorMessage}`);
+
+          throw new McpError(McpErrorCode.API_CONNECTION_FAILED, `LDIMS API连接失败: ${errorMessage}`, {
+            userMessage: `无法连接到LDIMS服务，请检查网络连接和服务状态。错误: ${errorMessage}`,
+            details: {
+              query: validatedArgs.query,
+              endpoint: "searchDocuments"
+            }
+          });
         }
 
         const searchResult = result;
 
+        // 生成正常的搜索结果输出
         return {
           content: [
             {
               type: "text",
-              text: `文档搜索结果：
+              text: `🔍 文档搜索结果
 
+📊 数据源: LDIMS API
 查询: "${searchResult.searchMetadata.queryProcessed}"
 搜索模式: ${searchResult.searchMetadata.searchMode}
 执行时间: ${searchResult.searchMetadata.executionTime}
@@ -311,24 +449,25 @@ ${result.content}`,
 
 ${searchResult.results
   .map(
-    (doc, index) => `
-${index + 1}. ${doc.documentName}
-   文档ID: ${doc.documentId}
-   相关度: ${(doc.relevanceScore * 100).toFixed(1)}%
-   提交人: ${doc.metadata.submitter}
-   创建时间: ${doc.metadata.createdAt}
-   文档类型: ${doc.metadata.documentType}
-   ${doc.metadata.departmentName ? `部门: ${doc.metadata.departmentName}` : ""}
+    (doc, index) => `📄 ${index + 1}. ${doc.documentName}
+   🆔 文档ID: ${doc.documentId}
+   📈 相关度: ${(doc.relevanceScore * 100).toFixed(1)}%
+   👤 提交人: ${doc.metadata.submitter}
+   📅 创建时间: ${new Date(doc.metadata.createdAt).toLocaleString("zh-CN")}
+   📋 文档类型: ${doc.metadata.documentType}
+   ${doc.metadata.departmentName ? `🏢 部门: ${doc.metadata.departmentName}` : ""}
    
-   匹配内容预览:
+   📝 匹配内容预览:
    ${doc.matchedContext}
-`,
+`
   )
   .join("\n")}
 
-提示: 您可以使用文档ID通过 ldims://docs/{document_id}/extracted_content 资源获取完整文档内容。`,
-            },
-          ],
+💡 下一步操作:
+• 使用 ldims://docs/{document_id}/extracted_content 资源获取完整文档内容
+• 通过文档ID调用 get_document_file_content 工具获取原始文件`
+            }
+          ]
         };
       }
 
@@ -337,8 +476,8 @@ ${index + 1}. ${doc.documentName}
           userMessage: `工具 "${name}" 不存在，请检查工具名称是否正确`,
           details: {
             requestedTool: name,
-            availableTools: ["get_document_file_content", "searchDocuments"],
-          },
+            availableTools: ["get_document_file_content", "searchDocuments"]
+          }
         });
     }
   } catch (_error) {
@@ -347,16 +486,16 @@ ${index + 1}. ${doc.documentName}
       content: [
         {
           type: "text",
-          text: mcpError.userMessage ?? mcpError.message,
-        },
+          text: mcpError.userMessage ?? mcpError.message
+        }
       ],
-      isError: true,
+      isError: true
     };
   }
 });
 
 // 资源读取处理
-server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+server.setRequestHandler(ReadResourceRequestSchema, async request => {
   const { uri } = request.params;
 
   try {
@@ -367,7 +506,7 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
     if (!match?.[1]) {
       throw McpError.resourceNotFound(uri, {
         reason: "URI格式不正确",
-        expectedFormat: "ldims://docs/{document_id}/extracted_content",
+        expectedFormat: "ldims://docs/{document_id}/extracted_content"
       });
     }
 
@@ -381,16 +520,36 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
         async () => {
           return await ldimsApi.getDocumentExtractedContent(documentId);
         },
-        { resource: "extracted_content", documentId },
+        { resource: "extracted_content", documentId }
       );
-    } catch (_error) {
-      console.warn("内容提取API调用失败，使用Mock数据:", _error);
-      result = createMockExtractedContent(documentId);
-    }
 
-    if (isErrorResponse(result)) {
-      console.warn("API错误，使用Mock数据:", result.errorMessage);
-      result = createMockExtractedContent(documentId);
+      if (isErrorResponse(result)) {
+        // 直接返回API错误，不使用Mock数据
+        throw new McpError(McpErrorCode.API_SERVER_ERROR, `文档内容提取失败: ${result.errorMessage}`, {
+          userMessage: `无法获取文档内容: ${result.errorMessage}`,
+          details: {
+            documentId,
+            errorCode: result.errorCode,
+            errorDetails: result.errorDetails
+          }
+        });
+      }
+    } catch (_error) {
+      // 直接抛出错误，不使用Mock数据
+      if (_error instanceof McpError) {
+        throw _error;
+      }
+
+      const errorMessage = _error instanceof Error ? _error.message : String(_error);
+      console.error("文档内容提取API调用失败:", errorMessage);
+
+      throw new McpError(McpErrorCode.API_CONNECTION_FAILED, `文档内容提取API连接失败: ${errorMessage}`, {
+        userMessage: `无法连接到LDIMS服务获取文档内容，请检查网络连接和服务状态。错误: ${errorMessage}`,
+        details: {
+          documentId,
+          operation: "getDocumentExtractedContent"
+        }
+      });
     }
 
     const content = result;
@@ -400,14 +559,14 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
         {
           uri: content.uri,
           text: content.text,
-          metadata: content.metadata,
-        },
-      ],
+          metadata: content.metadata
+        }
+      ]
     };
   } catch (_error) {
     const mcpError = handleMcpError(_error, {
       uri,
-      operation: "resource_read",
+      operation: "resource_read"
     });
     throw new Error(mcpError.userMessage ?? mcpError.message);
   }
@@ -475,7 +634,7 @@ function setupGracefulShutdown() {
 
 // 启动应用
 setupGracefulShutdown();
-startServer().catch((error) => {
+startServer().catch(error => {
   console.error("❌ 服务器启动失败:", error);
   process.exit(1);
 });
