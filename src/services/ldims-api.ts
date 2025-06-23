@@ -315,36 +315,30 @@ export class LdimsApiService {
     params: z.infer<typeof SearchDocumentsSchema>
   ): Promise<SearchDocumentsResponse | McpErrorResponse> {
     try {
-      this.logger.debug("搜索文档请求", {
-        query: params.query,
-        maxResults: params.maxResults,
-        filters: params.filters
+      // 验证输入参数
+      const validatedParams = SearchDocumentsSchema.parse(params);
+      const { query, maxResults, filters } = validatedParams;
+
+      // 构建API URL
+      const urlParams = new URLSearchParams({
+        keyword: query,
+        page: "1",
+        pageSize: (maxResults ?? 10).toString()
       });
 
-      // 构建查询参数 - 匹配LDIMS后端API
-      const queryParams = new URLSearchParams({
-        searchText: params.query,
-        pageSize: String(params.maxResults ?? 10),
-        page: "1"
-      });
-
-      // 添加过滤条件
-      if (params.filters) {
-        if (params.filters.dateFrom) queryParams.append("startDate", params.filters.dateFrom);
-        if (params.filters.dateTo) queryParams.append("endDate", params.filters.dateTo);
-        if (params.filters.documentType) queryParams.append("docTypeName", params.filters.documentType);
-        if (params.filters.submitter) queryParams.append("submitter", params.filters.submitter);
-        // 排序参数
-        queryParams.append("sortField", "createdAt");
-        queryParams.append("sortOrder", "DESC");
+      // **添加过滤条件**
+      if (filters?.documentType) {
+        urlParams.append("docTypeName", filters.documentType);
       }
 
+      const url = `/api/v1/documents/search?${urlParams.toString()}`;
+
+      this.logger.log(`[LDIMS API] 搜索文档: ${url}`);
       const startTime = Date.now();
-      const response = await this.makeRequest(`/api/v1/documents/search/content?${queryParams.toString()}`);
-      const executionTime = `${Date.now() - startTime}ms`;
+      const responseData = await this.makeRequest(url);
 
       // 验证响应格式
-      const validatedResponse = LdimsSearchResponse.parse(response);
+      const validatedResponse = LdimsSearchResponse.parse(responseData);
 
       if (validatedResponse.code !== 200) {
         throw new LdimsApiError("SEARCH_FAILED", validatedResponse.message ?? "搜索请求失败");
@@ -418,7 +412,7 @@ export class LdimsApiService {
         }),
         totalMatches: validatedResponse.data.total ?? 0,
         searchMetadata: {
-          executionTime,
+          executionTime: `${Date.now() - startTime}ms`,
           searchMode: params.filters?.searchMode ?? "semantic",
           queryProcessed: params.query,
           // 新增：内容处理元数据
@@ -433,7 +427,7 @@ export class LdimsApiService {
       this.logger.info("文档搜索完成（增强版）", {
         query: params.query,
         resultsCount: searchResults.results.length,
-        executionTime,
+        executionTime: `${Date.now() - startTime}ms`,
         totalContentLength: searchResults.results.reduce((sum, r) => sum + r.matchedContext.length, 0),
         avgContentLength:
           searchResults.results.length > 0

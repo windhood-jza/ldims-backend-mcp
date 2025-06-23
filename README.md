@@ -2,6 +2,38 @@
 
 本目录包含LDIMS MCP服务的实用脚本工具。
 
+## 🚀 运行方式
+
+### 方式一：MCP模式（推荐）
+
+通过MCP客户端调用，Token配置在MCP客户端中：
+
+```bash
+# 编译
+npm run build
+
+# MCP客户端会自动调用 node dist/index.js
+# Token通过MCP配置传递，不需要.env文件中的LDIMS_AUTH_TOKEN
+```
+
+### 方式二：HTTP模式（适合测试和集成）
+
+启动独立的HTTP服务器，使用`.env`文件中的配置：
+
+```bash
+# 确保.env文件中配置了LDIMS_AUTH_TOKEN
+npm run http
+
+# 或直接运行
+node dist/http-server.js
+```
+
+**🔐 双Token模式说明**：
+
+- **MCP模式**：使用MCP客户端配置中的Token
+- **HTTP模式**：使用`.env`文件中的`LDIMS_AUTH_TOKEN`
+- 两种模式独立配置，互不干扰
+
 ## 🚀 快速开始
 
 ### 完整部署流程
