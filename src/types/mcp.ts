@@ -31,6 +31,10 @@ export interface DocumentFileContentResponse {
     /** 文件哈希值（可选） */
     hash?: string;
   };
+  /** 是否找到内容 */
+  found?: boolean;
+  /** 友好提示信息（当 found=false 时提供） */
+  message?: string;
 }
 
 /**
@@ -144,10 +148,25 @@ export interface McpServiceConfig {
 // =============================================================================
 
 /**
- * 获取文档文件内容的参数Schema
+ * 获取单个文档文件的提取内容。
+ *
+ * 推荐调用顺序：
+ * 1. 先使用 searchDocuments({ query: "关键词" }) 检索文档；
+ * 2. 在返回结果中找到 `results[*].fileDetails[*].fileId`；
+ * 3. 将该值作为 file_id 传入本工具，即可获取文件内容。
+ *
+ * 如果您已知 file_id，可直接跳过第 1 步。
+ *
+ * 示例：
+ *   const { results } = await mcp.searchDocuments({ query: "合同" });
+ *   const fileId = results[0].fileDetails[0].fileId;
+ *   const file = await mcp.get_document_file_content({ file_id: fileId });
  */
 export const GetDocumentFileContentSchema = z.object({
-  file_id: z.string().min(1, "文件ID不能为空").describe("LDIMS系统中的文档文件ID"),
+  file_id: z
+    .string()
+    .min(1, "文件ID不能为空")
+    .describe("LDIMS系统中的文档文件ID，可通过 searchDocuments 结果中的 fileDetails.fileId 获取"),
   include_metadata: z.boolean().optional().default(false).describe("是否包含文件元数据信息"),
   format: z
     .enum(["text", "base64"])

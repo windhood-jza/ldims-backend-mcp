@@ -207,7 +207,21 @@ export class LdimsApiService {
 
         clearTimeout(timeoutId);
 
+        // 若后端返回 404 或 204，统一返回友好提示而非抛错
         if (!response.ok) {
+          if (response.status === 404 || response.status === 204) {
+            console.warn(`[LDIMS API] 文件 ${fileId} 未找到内容，返回友好提示。`);
+
+            return {
+              file_id: String(fileId),
+              content: "",
+              format,
+              found: false,
+              message: "未找到提取内容，文件可能被删除或尚未解析。"
+            } as DocumentFileContentResponse;
+          }
+
+          // 其它 HTTP 错误依旧抛出异常
           throw new LdimsApiError(
             `HTTP_${response.status}`,
             `HTTP request failed: ${response.status} ${response.statusText}`
@@ -232,22 +246,29 @@ export class LdimsApiService {
           throw new LdimsApiError("NO_DATA", "API response missing data field");
         }
 
+        const hasContent = Boolean(validatedResponse.data.extractedContent);
+
         // 转换为MCP格式 - 处理LDIMS API响应格式
         const result: DocumentFileContentResponse = {
           file_id: String(validatedResponse.data.id ?? fileId),
           content: validatedResponse.data.extractedContent ?? "",
           format: format,
-          ...(includeMetadata && {
-            metadata: {
-              filename: validatedResponse.data.fileName ?? "未知文件",
-              size: validatedResponse.data.fileSize ?? 0,
-              created_at: validatedResponse.data.createdAt ?? new Date().toISOString(),
-              mime_type: validatedResponse.data.fileType ?? "text/plain",
-              ...(validatedResponse.data.updatedAt && {
-                updated_at: validatedResponse.data.updatedAt
-              })
-            }
-          })
+          found: hasContent,
+          ...(hasContent
+            ? {
+                ...(includeMetadata && {
+                  metadata: {
+                    filename: validatedResponse.data.fileName ?? "未知文件",
+                    size: validatedResponse.data.fileSize ?? 0,
+                    created_at: validatedResponse.data.createdAt ?? new Date().toISOString(),
+                    mime_type: validatedResponse.data.fileType ?? "text/plain",
+                    ...(validatedResponse.data.updatedAt && {
+                      updated_at: validatedResponse.data.updatedAt
+                    })
+                  }
+                })
+              }
+            : { message: "未找到提取内容，文件可能被删除或尚未解析。" }),
         };
 
         console.log(`[LDIMS API] 成功获取文件内容: ${fileId}`);
@@ -321,7 +342,7 @@ export class LdimsApiService {
 
       // 构建API URL
       const urlParams = new URLSearchParams({
-        keyword: query,
+        searchText: query,
         page: "1",
         pageSize: (maxResults ?? 10).toString()
       });
@@ -331,7 +352,7 @@ export class LdimsApiService {
         urlParams.append("docTypeName", filters.documentType);
       }
 
-      const url = `/api/v1/documents/search?${urlParams.toString()}`;
+      const url = `/api/v1/documents/search/content?${urlParams.toString()}`;
 
       this.logger.log(`[LDIMS API] 搜索文档: ${url}`);
       const startTime = Date.now();

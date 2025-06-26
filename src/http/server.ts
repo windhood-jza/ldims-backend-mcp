@@ -25,7 +25,10 @@ export class HttpMcpServer {
   private ldimsService: LdimsApiService;
   private startTime: number;
   private mcpServer: Server;
-  private transport: StreamableHTTPServerTransport;
+  /**
+   * 保存所有活动会话的 transport，key 为 sessionId
+   */
+  private transports: Map<string, StreamableHTTPServerTransport> = new Map();
 
   constructor(config: HttpServerConfig) {
     this.config = config;
@@ -44,13 +47,6 @@ export class HttpMcpServer {
     // 创建单一的 Server 和 Transport 实例
     this.mcpServer = new Server({ name: "ldims-http-mcp-server", version: "1.0.0" }, { capabilities: { tools: {} } });
     this.setupMcpServer(this.mcpServer);
-
-    this.transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: randomUUID
-    });
-
-    // 将 server 和 transport 连接起来
-    this.mcpServer.connect(this.transport);
 
     this.setupRoutes();
 
@@ -266,8 +262,55 @@ export class HttpMcpServer {
 
   private async handleMcpRequest(req: Request, res: Response): Promise<void> {
     try {
-      // 所有MCP请求都由 transport 实例处理
-      await this.transport.handleRequest(req, res, req.body);
+      // 解析 sessionId：优先 path param，其次 Header
+      const headerSessionIdRaw = req.headers["mcp-session-id"];
+      const headerSessionId = Array.isArray(headerSessionIdRaw) ? headerSessionIdRaw[0] : headerSessionIdRaw;
+      const sessionId: string | undefined = (req.params as any).sessionId || headerSessionId;
+
+      // 判断是否为初始化请求（method === "initialize"）
+      const isInitialize = req.method === "POST" && req.body && req.body.method === "initialize";
+
+      let transport: StreamableHTTPServerTransport | undefined;
+
+      if (isInitialize) {
+        // 新建会话
+        transport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: randomUUID,
+          onsessioninitialized: (sid: string) => {
+            // 保存映射
+            this.transports.set(sid, transport as StreamableHTTPServerTransport);
+            // 监听断连以清理映射，避免内存泄漏
+            (transport as any).on?.("disconnect", () => {
+              this.transports.delete(sid);
+            });
+          }
+        });
+
+        // 连接到 MCP Server
+        this.mcpServer.connect(transport);
+
+        // 让 transport 处理此次初始化请求
+        (req.headers as any).accept = "application/json, text/event-stream";
+        await transport.handleRequest(req, res, req.body);
+        return;
+      }
+
+      // 非 initialize 请求必须携带 sessionId
+      if (!sessionId) {
+        this.sendError(res, "MISSING_SESSION_ID", "Mcp-Session-Id header or /mcp/:sessionId path param required", 400);
+        return;
+      }
+
+      transport = this.transports.get(sessionId);
+
+      if (!transport) {
+        this.sendError(res, "UNKNOWN_SESSION", `Unknown MCP session: ${sessionId}`, 404);
+        return;
+      }
+
+      // 让已存在的 transport 处理后续请求
+      (req.headers as any).accept = "application/json, text/event-stream";
+      await transport.handleRequest(req, res, req.body);
     } catch (error) {
       console.error(`Error handling MCP request:`, error);
       if (!res.headersSent) {
@@ -299,7 +342,7 @@ export class HttpMcpServer {
       error: {
         code,
         message,
-        details: error?.message || error
+        details: (error as any)?.message ?? error
       },
       timestamp: new Date().toISOString(),
       executionTime
@@ -309,11 +352,9 @@ export class HttpMcpServer {
 
   private errorHandler(error: any, _req: Request, res: Response, next: NextFunction): void {
     console.error("HTTP Server Error:", error);
-
     if (res.headersSent) {
       return next(error);
     }
-
     this.sendError(res, "INTERNAL_ERROR", "Internal server error", 500, error);
   }
 
@@ -332,7 +373,7 @@ export class HttpMcpServer {
           reject(error);
         });
       } catch (error) {
-        console.error(`❌ Failed to start server:`, error);
+        console.error("❌ Failed to start server:", error);
         process.exit(1);
       }
     });
@@ -341,7 +382,6 @@ export class HttpMcpServer {
   public async stop(): Promise<void> {
     if (this.server) {
       console.log("\n gracefully shutting down the server...");
-
       this.server.close((err: any) => {
         if (err) {
           console.error("❌ Error during server shutdown:", err);
