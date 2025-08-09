@@ -14,16 +14,6 @@ import {
   SearchDocumentsSchema
 } from "../types/mcp.js";
 
-// 新增: HTML 字符转义工具函数，防止注入
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
 /**
  * LDIMS API响应结构 - 匹配真实后端格式
  */
@@ -278,7 +268,7 @@ export class LdimsApiService {
                   }
                 })
               }
-            : { message: "未找到提取内容，文件可能被删除或尚未解析。" })
+            : { message: "未找到提取内容，文件可能被删除或尚未解析。" }),
         };
 
         console.log(`[LDIMS API] 成功获取文件内容: ${fileId}`);
@@ -422,14 +412,9 @@ export class LdimsApiService {
             fullContent = `[文档信息]\n文档名称: ${result.docName}\n文档类型: ${result.docTypeName}\n提交人: ${result.submitter}\n创建时间: ${result.createdAt}`;
           }
 
-          // 新增: 构造 Markdown 链接 (点击后通过 URL 参数触发前端搜索)
-          const safeName = escapeHtml(result.docName ?? "未知文档");
-          const markdownDocumentName = `[${safeName}](/#/documents?docName=${encodeURIComponent(result.docName ?? "")})`;
-
           return {
             documentId: String(result.id),
             documentName: result.docName ?? "未知文档",
-            markdownDocumentName,
             relevanceScore: 0.8,
             matchedContext: fullContent, // 现在包含完整内容，不再截断
             metadata: {
