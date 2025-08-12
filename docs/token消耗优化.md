@@ -191,3 +191,72 @@ relevance_score = score_keywords + score_density + score_position
 ---
 
 > 以上进阶优化预计在 1~2 人日内完成，主要为文本处理逻辑，风险低，可快速迭代。
+
+---
+
+## 十、实现方式与配置（第一阶段）
+
+> 目标：默认启用 smart_extract 优化，在确保向后兼容的前提下落地“片段抽取 + 基础评分 + 可配置摘要拼接”。
+
+- 实现策略
+
+  - 默认模式：`content_mode = "smart_extract"`（可通过入参切换为 `full`）
+  - 片段来源：仅从真实文件内容生成（方式 A）。当文档无文件或文件无内容时，不返回 `snippets`，仅在
+    `matchedContext` 提供简短摘要或提示
+  - Snippet 结构（必填字段）：
+    - `content: string`
+    - `file_id: string`（来源文件 ID）
+    - `file_name: string`（来源文件名）
+    - `keywords_matched: string[]`
+    - `original_char_start: number`
+    - `original_char_end: number`
+    - `relevance_score: number`
+    - `scoring_details?: { unique_keywords; total_keywords; span; percent_in_doc }`（第一阶段默认不返回）
+  - `matchedContext` 向后兼容：在 smart_extract 下是否拼接“短摘要”由环境变量控制（见下）
+
+- 环境变量配置（服务级）
+
+  - `LDIMS_SEARCH_MAX_SNIPPETS`（默认 10，范围 1~50）：限制返回片段上限；请求不再提供该入参，统一以环境变量生效
+  - `LDIMS_RETURN_SNIPPET_SUMMARY`（默认 true）：是否将前 N 个片段的“短摘要拼接”写入
+    `matchedContext`；若为 false，则 `matchedContext` 可为空或仅保留极短提示
+  - 可选：`LDIMS_DEFAULT_CONTENT_MODE`（默认 `smart_extract`）：需要时可在不同环境切换默认返回模式
+
+- 接口入参（Schema）扩展
+
+  - 新增：`content_mode?: "full" | "smart_extract" = "smart_extract"`
+  - 新增：`context_chars?: number = 400`
+  - 新增：`merge_overlapping?: boolean = true`
+  - 新增：`return_scoring_details?: boolean = false`
+  - 说明：`max_snippets` 不作为入参提供，统一由环境变量 `LDIMS_SEARCH_MAX_SNIPPETS` 控制
+
+- 基础相关性评分（第一阶段）
+
+  - 采用“关键词去重计数 + 简单密度 + 位置轻度加成”的基础评分；不启用加权系数与动态窗口、去重等进阶能力（见第九节）
+
+- 向后兼容
+
+  - `full` 模式下保持现状，`matchedContext` 仍可返回全文（或长文本拼接）
+  - `smart_extract` 模式下主要读取 `snippets`；是否在 `matchedContext` 中拼接摘要由
+    `LDIMS_RETURN_SNIPPET_SUMMARY` 控制
+
+- 环境变量示例
+
+```env
+# 片段上限（1~50）
+LDIMS_SEARCH_MAX_SNIPPETS=10
+
+# 是否将前 N 个片段的短摘要拼接到 matchedContext（true/false）
+LDIMS_RETURN_SNIPPET_SUMMARY=true
+
+# 可选：默认返回模式（smart_extract 或 full）
+# LDIMS_DEFAULT_CONTENT_MODE=smart_extract
+```
+
+### 排序规则
+
+- 片段排序：按 `relevance_score` 降序；同分则按去重后关键词数 `unique_keywords` 降序；仍同分则按
+  `original_char_start` 升序。
+- 摘要拼接：当 `LDIMS_RETURN_SNIPPET_SUMMARY=true` 时，取前 N（由 `LDIMS_SEARCH_MAX_SNIPPETS`
+  控制）的片段，按上述顺序拼接到 `matchedContext`。
+- 结果排序：`results[*].relevanceScore` 定义为该文档内 `snippets` 的最高
+  `relevance_score`；最终返回按该分值降序排序（无片段则视为 0）。
